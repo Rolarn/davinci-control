@@ -1,0 +1,7 @@
+id=davinci-control
+name=Davinci Control
+version=v1.0.0
+versionCode=10000
+author=Rolarn
+description=Зарядка, производительность и яркость для Mi 9T / Redmi K20 (davinci) · Charging, performance and brightness for Mi 9T / Redmi K20 (davinci)
+updateJson=https://raw.githubusercontent.com/Rolarn/davinci-control/main/update.json

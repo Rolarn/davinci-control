@@ -1,0 +1,12 @@
+# Сборка / build
+/dist/
+*.zip
+# Логи и диагностика никогда не попадают в репозиторий / logs and diagnostics never go into the repo
+*.log
+*_diag_*.txt
+*_log_*.txt
+davinci-control_v*.txt
+/tests/out/
+# Прочее / misc
+node_modules/
+.DS_Store

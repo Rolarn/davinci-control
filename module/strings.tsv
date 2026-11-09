@@ -1,0 +1,81 @@
+# код	русский	English — {1}, {2}… подставляются / are substituted
+boot	Загрузка: версия {1}, powerhint {2}/3	Boot: version {1}, powerhint {2}/3
+start	Служба запущена ({1}), зарядкой управляет {2}	Service started ({1}), charging is controlled via {2}
+start_nosw	Служба запущена ({1}), но остановить зарядку нечем — лимит не работает	Service started ({1}), but there is no way to stop charging — the limit does not work
+sw_bad	Не удалось записать {2} в {1} (читается {3}) — способ отброшен	Could not write {2} to {1} (reads {3}) — switch dropped
+sw_now	Теперь зарядкой управляет {1}	Charging is now controlled via {1}
+sw_nostop	{1} не останавливает зарядку (статус {2}, заряд {3}→{4}%) — пробую следующий способ	{1} does not stop charging (status {2}, charge {3}→{4}%) — trying the next switch
+sw_none	Не нашёл способа остановить зарядку — лимит и пауза не работают	No way to stop charging found — limit and pause do not work
+disable_thermal	В ядре включён disable_thermal: ступени тока не принимаются, «Бережно» и удержание не работают	disable_thermal is on in the kernel: current levels are rejected, Care and the hold do not work
+skip_thermal	В ядре включён skip_thermal: ступени тока принимаются, но не действуют — «Бережно» и удержание не работают	skip_thermal is on in the kernel: current levels are accepted but ignored — Care and the hold do not work
+cc_other	Ступень тока сменил кто-то другой ({1}→{2}) — возвращаю {1}	Someone else changed the current level ({1}→{2}) — restoring {1}
+cc_reject	Ядро не принимает ступень тока ({1}: записал {2}, читается {3}) — функция выключена до перезагрузки	The kernel rejects the current level ({1}: wrote {2}, reads {3}) — feature off until reboot
+cc_limit	Ток снижен: ступень {1} из {2} (батарея {3}°)	Current reduced: level {1} of {2} (battery {3}°)
+cc_free	Ток без ограничения (батарея {1}°)	Current unrestricted (battery {1}°)
+uev_on	Кабель отслеживается мгновенно (BusyBox uevent)	Cable is tracked instantly (BusyBox uevent)
+uev_off	BusyBox uevent недоступен — кабель проверяется раз в 30–60 с	BusyBox uevent unavailable — cable is checked every 30–60 s
+uev_restart	Слушатель кабеля перезапущен	Cable listener restarted
+uev_fail	Слушатель кабеля падает — дальше по таймеру	Cable listener keeps failing — using the timer
+thermal_off	Заводское снижение тока при нагреве корпуса выключено (файлы модуля)	Stock current reduction on body heat is off (module configs)
+thermal_mismatch	Файлы нагрева прошивки отличаются от проверенных — оставлены как есть	Stock thermal configs differ from the tested ones — left as they are
+thermal_nomount	Файлы нагрева модуля не подключились — root-менеджер не подменяет файлы (для KernelSU нужен метамодуль)	Module thermal configs are not mounted — the root manager does not overlay files (KernelSU needs a metamodule)
+disabled	Модуль выключен — зарядка разрешена, служба остановлена	Module disabled — charging allowed, service stopped
+pause_hot	Пауза зарядки: батарея {1}° (порог {2}°), заряд {3}%	Charging paused: battery {1}° (threshold {2}°), charge {3}%
+pause_limit	Пауза зарядки: достигнут лимит {1}%, заряд {2}%	Charging paused: limit {1}% reached, charge {2}%
+resume	Зарядка продолжена: заряд {1}%, батарея {2}°	Charging resumed: charge {1}%, battery {2}°
+hold_on	Держу датчик батареи ниже 45°: ток снижен (ступень {1}, датчик {2}°)	Keeping the battery sensor below 45°: current reduced (level {1}, sensor {2}°)
+hold_off	Удержание снято — полный ток (датчик {1}°)	Hold released — full current (sensor {1}°)
+jeita_lag	Ядро снизило ток выше 45° с задержкой {1} с	The kernel reduced current above 45° with a {1} s delay
+sess	Сеанс зарядки: {1}→{2}% за {3} мин	Charging session: {1}→{2}% in {3} min
+app_inst	Приложение установлено: {1}	App installed: {1}
+app_rem	Приложение удалено: {1}	App removed: {1}
+app_re	Приложение переустановлено: {1}	App reinstalled: {1}
+bright_max	Кабель подключён — яркость 100%	Cable connected — brightness 100%
+bright_auto	Кабель отключён — автояркость	Cable disconnected — auto brightness
+bright_fail	Не удалось изменить яркость	Could not change brightness
+saver_on	Экономия заряда включена	Battery Saver turned on
+saver_fail	Не удалось включить экономию заряда	Could not turn on Battery Saver
+saver_again	Экономию заряда кто-то выключил — включил снова	Battery Saver was turned off — turned it back on
+drain_alert	Расход во сне вырос: {1} мА за неделю против {2} мА раньше	Overnight drain went up: {1} mA this week vs {2} mA before
+daemon_restart	Служба остановилась неожиданно — перезапуск ({1})	Service stopped unexpectedly — restarting ({1})
+daemon_giveup	Служба падает снова и снова — больше не перезапускаю	Service keeps crashing — no more restarts
+diag_saved	Диагностика сохранена: {1}	Diagnostics saved: {1}
+log_saved	Журнал сохранён: {1}	Log saved: {1}
+set_full	Настройка: зарядить до 100% один раз	Setting: charge to 100% once
+set_full_off	Настройка: зарядка до 100% отменена	Setting: charge to 100% cancelled
+set_limit	Настройка: заряжать до {1}%	Setting: charge up to {1}%
+set_hot	Настройка: пауза при нагреве {1}°	Setting: heat pause {1}°
+set_freq_little	Настройка: предел малых ядер {1} МГц	Setting: little cores limit {1} MHz
+set_freq_big	Настройка: предел больших ядер {1} МГц	Setting: big cores limit {1} MHz
+set_profile_perf	Настройка: профиль «Максимум»	Setting: profile Maximum
+set_profile_balance	Настройка: профиль «Баланс»	Setting: profile Balance
+set_profile_eco	Настройка: профиль «Экономия»	Setting: profile Economy
+set_mode_care	Настройка: режим зарядки «Бережно»	Setting: charging mode Care
+set_mode_fast	Настройка: режим зарядки «Быстро»	Setting: charging mode Fast
+set_thermal_0	Настройка: заводское снижение тока выключить (после перезагрузки)	Setting: turn stock current reduction off (after reboot)
+set_thermal_1	Настройка: заводское снижение тока вернуть (после перезагрузки)	Setting: restore stock current reduction (after reboot)
+set_brightcharge_1	Настройка: яркость 100% на зарядке	Setting: 100% brightness while charging
+set_brightcharge_0	Настройка: яркость на зарядке не трогать	Setting: leave brightness alone while charging
+set_autobatt_1	Настройка: автояркость без кабеля	Setting: auto brightness on battery
+set_autobatt_0	Настройка: яркость без кабеля не трогать	Setting: leave brightness alone on battery
+set_saver_1	Настройка: экономия заряда без кабеля	Setting: Battery Saver on battery
+set_saver_0	Настройка: экономию заряда не включать	Setting: do not turn on Battery Saver
+set_usb_1	Настройка: быстрая зарядка от компьютера	Setting: fast charging from a computer
+set_usb_0	Настройка: обычная зарядка от компьютера	Setting: normal charging from a computer
+set_resetsw	Настройка: список отброшенных способов очищен	Setting: dropped switches list cleared
+desc_ok	✅ Работает. Кнопка «Действие» — панель.	✅ Running. Tap Action to open the panel.
+desc_bad	⚠️ {1}. Подробности — в панели (кнопка «Действие»).	⚠️ {1}. Details in the panel (Action button).
+desc_ph	powerhint {1}/3	powerhint {1}/3
+desc_nosw	лимит заряда не работает	charge limit does not work
+desc_skip	ядро игнорирует ступени тока (skip_thermal)	the kernel ignores current levels (skip_thermal)
+act_open	Открываю панель…	Opening the panel…
+act_nowebui	Панель с кнопками откроется в WebUI X, KsuWebUI или MMRL — установи одно из них и выдай ему root.	The panel opens in WebUI X, KsuWebUI or MMRL — install one of them and grant it root.
+r_checks	Проверки	Checks
+r_daemon_ok	служба: работает	service: running
+r_daemon_bad	служба: НЕ работает	service: NOT running
+r_charge	Зарядка	Charging
+r_batt	Батарея	Battery
+r_events	События	Events
+e_range	Нужно число от {1} до {2}	A number from {1} to {2} is required
+e_freq	Нет такой частоты	No such frequency
+e_arg	Неверное значение	Invalid value
