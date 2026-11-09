@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Davinci Control</title>
+<link rel="stylesheet" href="mascot.css">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="scroll">
+<header id="hero">
+  <div id="heroM"></div>
+  <h1 data-t="title">Davinci Control</h1>
+  <button class="status" id="headS" type="button"><i></i><span data-t="connecting"></span></button>
+</header>
+<main>
+  <div id="problems"></div>
+
+  <section class="card" id="cNow">
+    <div class="ch"><h2 data-t="now"></h2><button class="q" data-help="h_now"></button></div>
+    <div class="hero2">
+      <div class="capn num" id="cap">—<small>%</small></div>
+      <div class="hstat"><div class="w num" id="pwr">—</div><div class="small muted" id="pwrS">&nbsp;</div></div>
+    </div>
+    <div class="batbar"><i id="capBar"></i><b id="limMark"></b></div>
+    <div class="small muted" id="capS">&nbsp;</div>
+    <div class="est">
+      <div class="box"><div class="l" id="e1l"></div><div class="n num" id="e1">—</div><div class="s" id="e1s">&nbsp;</div></div>
+      <div class="box"><div class="l" data-t="by_day"></div><div class="n num" id="e2">—</div><div class="s" id="e2s">&nbsp;</div></div>
+    </div>
+    <div class="temps">
+      <div class="box"><div class="l" data-t="t_batt"></div><div class="n num" id="tB">—</div></div>
+      <div class="box"><div class="l" data-t="t_body"></div><div class="n num" id="tQ">—</div></div>
+      <div class="box"><div class="l" data-t="t_cpu"></div><div class="n num" id="tC">—</div></div>
+    </div>
+    <details class="more"><summary><span data-t="chips"></span></summary>
+      <div class="temps"><div class="box"><div class="l" data-t="t_pmic"></div><div class="n num" id="tP">—</div></div>
+        <div class="box"><div class="l" data-t="t_cp"></div><div class="n num" id="tCP">—</div></div>
+        <div class="box"><div class="l" data-t="t_conn"></div><div class="n num" id="tCo">—</div></div></div>
+    </details>
+  </section>
+
+  <section class="card" id="cCharge">
+    <div class="ch"><h2 data-t="charging"></h2><button class="q" data-help="h_charging"></button></div>
+    <div class="cst idle" id="cst">—</div>
+    <div class="rows" id="chgRows"></div>
+    <div class="sect">
+      <div class="ctl"><div class="lab"><span data-t="mode"></span><button class="q" data-help="h_mode"></button></div>
+        <div class="seg" id="mode"></div><div class="conf" id="modeConf"></div></div>
+      <div class="ctl"><div class="lab"><span><span data-t="limit_to"></span> <b id="limVal">—</b></span><button class="q" data-help="h_limit"></button></div>
+        <input type="range" id="lim" min="50" max="100" step="5">
+        <div class="hint" id="limHint">&nbsp;</div><div class="conf" id="limConf"></div></div>
+      <div class="ctl"><div class="lab"><span data-t="hotpause"></span><button class="q" data-help="h_hot"></button></div>
+        <div class="seg" id="hot"></div><div class="conf" id="hotConf"></div></div>
+      <div class="ctl"><div class="btnrow"><button class="btn" id="full" type="button"></button><button class="q" data-help="h_full"></button></div><div class="conf" id="fullConf"></div></div>
+      <div class="ctl"><div class="lab"><span data-t="thermal"></span><button class="q" data-help="h_thermal"></button></div>
+        <div class="switch"><div><span class="hint" id="thState"></span></div><label class="tg"><input type="checkbox" id="thC" data-label="th_toggle"><i></i></label></div>
+        <div class="conf" id="thCConf"></div></div>
+      <div class="ctl" id="usbCtl"><div class="lab"><span data-t="usbfast"></span><button class="q" data-help="h_usb"></button></div>
+        <div class="switch"><div><span class="hint" data-t="usbfast_s"></span></div><label class="tg"><input type="checkbox" id="usb" data-label="usbfast"><i></i></label></div>
+        <div class="conf" id="usbConf"></div></div>
+    </div>
+    <details class="more"><summary><span data-t="sessions"></span><button class="q" data-help="h_sessions"></button></summary>
+      <div><ul class="log" id="sess"></ul></div></details>
+    <details class="more"><summary><span data-t="dt"></span><button class="q" data-help="h_dt"></button></summary>
+      <div><div id="dtTable"></div></div></details>
+  </section>
+
+  <section class="card" id="cBright">
+    <div class="ch"><h2 data-t="bright"></h2><button class="q" data-help="h_bright"></button></div>
+    <div class="rows">
+      <div class="row"><span class="k" data-t="bl_now"></span><span class="v" id="blNow">—</span></div>
+      <div class="row"><span class="k" data-t="bl_mode"></span><span class="v" id="blMode">—</span></div>
+      <div class="row"><span class="k" data-t="saver"></span><span class="v" id="svNow">—</span></div>
+    </div>
+    <div class="sect">
+      <div class="ctl"><div class="switch"><div><b data-t="br_charge"></b><span class="hint" data-t="br_charge_s"></span></div>
+        <button class="q" data-help="h_brc"></button><label class="tg"><input type="checkbox" id="brC" data-label="br_charge"><i></i></label></div><div class="conf" id="brCConf"></div></div>
+      <div class="ctl"><div class="switch"><div><b data-t="br_auto"></b><span class="hint" data-t="br_auto_s"></span></div>
+        <button class="q" data-help="h_bra"></button><label class="tg"><input type="checkbox" id="brA" data-label="br_auto"><i></i></label></div><div class="conf" id="brAConf"></div></div>
+      <div class="ctl"><div class="switch"><div><b data-t="br_saver"></b><span class="hint" data-t="br_saver_s"></span></div>
+        <button class="q" data-help="h_brs"></button><label class="tg"><input type="checkbox" id="brS" data-label="br_saver"><i></i></label></div><div class="conf" id="brSConf"></div></div>
+    </div>
+  </section>
+
+  <section class="card" id="cPerf">
+    <div class="ch"><h2 data-t="perf"></h2><button class="q" data-help="h_perf"></button></div>
+    <div class="seg" id="prof"></div>
+    <div class="hint" id="profHint">&nbsp;</div><div class="conf" id="profConf"></div>
+    <div class="rows">
+      <div class="row"><span class="k" data-t="little"></span><span class="v" id="nL">—</span></div>
+      <div class="row"><span class="k" data-t="big"></span><span class="v" id="nB">—</span></div>
+      <div class="row"><span class="k" data-t="gpu"></span><span class="v" id="nG">—</span></div>
+    </div>
+    <div class="hint" id="erHint" data-t="er" hidden></div>
+    <details class="more"><summary><span data-t="fine"></span></summary>
+      <div>
+        <div class="ctl"><div class="lab"><span data-t="little_max"></span><button class="q" data-help="h_fine"></button></div><div class="chips" id="little"></div><div class="conf" id="littleConf"></div></div>
+        <div class="ctl"><div class="lab"><span data-t="big_max"></span></div><div class="chips" id="big"></div><div class="conf" id="bigConf"></div></div>
+        <div class="hint" data-t="share"></div>
+        <div class="dh" data-t="little"></div><div id="dLittle"></div>
+        <div class="dh" data-t="big"></div><div id="dBig"></div>
+        <div class="dh" data-t="gpu"></div><div id="dGpu"></div>
+      </div>
+    </details>
+  </section>
+
+  <section class="card" id="cUse">
+    <div class="ch"><h2 data-t="use"></h2><button class="q" data-help="h_use"></button></div>
+    <div class="est" style="margin-top:0">
+      <div class="box"><div class="l" data-t="scr_on"></div><div class="n num" id="rOn">—</div><div class="s" id="rOnS">&nbsp;</div></div>
+      <div class="box"><div class="l" data-t="scr_off"></div><div class="n num" id="rOff">—</div><div class="s" id="rOffS">&nbsp;</div></div>
+    </div>
+    <div class="hint warnt" id="offHint" hidden></div>
+    <div class="chart"><div class="t"><span data-t="g_cap"></span> <span class="muted" id="hCap"></span></div><svg id="gCap" viewBox="0 0 300 100" preserveAspectRatio="none"></svg><div class="axis"><span data-t="ax24"></span><span data-t="ax12"></span><span data-t="axnow"></span></div></div>
+    <div class="chart"><div class="t"><span data-t="g_temp"></span> <span class="muted" id="hTemp"></span></div><svg id="gTemp" viewBox="0 0 300 100" preserveAspectRatio="none"></svg><div class="axis"><span data-t="ax24"></span><span data-t="ax12"></span><span data-t="axnow"></span></div></div>
+    <div class="legend"><span><i class="lgp"></i><span data-t="lg_pause"></span></span><span><i class="lgt"></i><span data-t="lg_thr"></span></span><span data-t="lg_gap"></span></div>
+    <div class="sect">
+      <div class="lab"><span data-t="nights"></span><button class="q" data-help="h_nights"></button></div>
+      <ul class="log" id="drain"></ul>
+      <div class="lab" style="margin-top:14px"><span data-t="weeks"></span><button class="q" data-help="h_weeks"></button></div>
+      <div id="weeks" class="weeks"></div>
+      <div class="switch" style="margin-top:10px"><div><span class="hint" data-t="alert_sw"></span></div><label class="tg"><input type="checkbox" id="alert" data-label="alert_sw"><i></i></label></div><div class="conf" id="alertConf"></div>
+    </div>
+    <div class="rows" style="margin-top:10px">
+      <div class="row"><span class="k" data-t="health"></span><span class="v" id="health">—</span></div>
+      <div class="row"><span class="k" data-t="cycles"></span><span class="v" id="cycles">—</span></div>
+      <div class="row"><span class="k" data-t="deep"></span><span class="v" id="sleep">—</span></div>
+    </div>
+  </section>
+
+  <section class="card" id="cLog">
+    <div class="ch"><h2 data-t="log"></h2><button class="q" data-help="h_log"></button></div>
+    <ul class="log" id="events"></ul>
+    <div class="btns"><button class="btn sec" id="showLogs" type="button" data-t="all_log"></button><button class="btn sec" id="diagBtn" type="button" data-t="diag"></button></div>
+    <button class="btn sec" id="saveLog" type="button" data-t="savelog" style="margin-top:8px"></button>
+    <div class="prog" id="dProgW"><i id="dProg"></i></div>
+    <div class="conf wrap" id="dStat"></div>
+    <div class="hint" data-t="diag_hint"></div>
+  </section>
+
+  <section class="card" id="cPanel">
+    <div class="ch"><h2 data-t="panel"></h2><button class="q" data-help="h_panel"></button></div>
+    <div class="ctl"><div class="lab"><span data-t="lang"></span></div><div class="seg" id="langSeg"></div></div>
+    <div class="ctl"><div class="lab"><span data-t="skin"></span></div><div class="skins" id="skins"></div></div>
+  </section>
+
+  <footer>Davinci Control <span id="fver"></span> · Rolarn · <button id="whatsnew" type="button" data-t="whatsnew"></button></footer>
+</main>
+</div>
+<div class="ladder" id="ladder"></div>
+<button class="dock" id="dock" type="button" data-label="up"><span class="hopper"><span id="dockM"></span></span></button>
+<div class="pop" id="pop" role="dialog"><span class="arrow" id="popA"></span><p id="popX"></p><div class="pc-ok"><button id="popOk" type="button" data-t="gotit"></button></div></div>
+<div id="modal"><div class="sheet"><div class="top"><h3 id="mTitle">—</h3><button class="icon" id="mClose" type="button" data-label="close">✕</button></div>
+  <div class="body" id="mBody"></div>
+  <div class="btns" id="mBtns"><button class="btn" id="mCopy" type="button" data-t="copy"></button><button class="btn sec" id="mSave" type="button" data-t="save"></button></div></div></div>
+<div id="toast"></div>
+<script src="i18n.js"></script>
+<script src="mascot.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

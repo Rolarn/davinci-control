@@ -1,0 +1,158 @@
+/* Маскот Davinci Control (SVG + CSS, без библиотек). Davinci Control mascot (SVG + CSS, no libraries). */
+/* ===== маскот ===== */
+.mascot { overflow: visible }
+.mascot .all { transform-box: view-box; transform-origin: 100px 210px; animation: bob 3.2s ease-in-out infinite }
+.mascot .cam { transform: translateY(27px); transition: transform .45s cubic-bezier(.3,1.6,.5,1) }
+.mascot .camled { opacity: 0; transition: opacity .3s }
+.mascot .eyes > g, .mascot .mouth > *, .mascot .prop { display: none }
+.mascot .eyes > .eo, .mascot .mouth > .m-smile { display: inline }
+.mascot .pupils { transition: transform .18s ease-out }
+.mascot .lids { transform-box: fill-box; transform-origin: center; transition: transform .08s }
+.mascot.blink .lids { transform: scaleY(.08) }
+.mascot .dim { opacity: 0; transition: opacity .5s }
+.mascot .armL, .mascot .armR { transform-box: fill-box; transform-origin: 50% 8% }
+.mascot .blush { opacity: .75; transition: fill .4s }
+@keyframes bob { 0%, 100% { transform: translateY(0) } 50% { transform: translateY(-3px) } }
+@keyframes breathe { 0%, 100% { transform: scale(1, 1) } 50% { transform: scale(1.015, .985) } }
+@keyframes pulse { 0%, 100% { opacity: .35 } 50% { opacity: 1 } }
+@keyframes blinkled { 0%, 49% { opacity: 1 } 50%, 100% { opacity: .15 } }
+@keyframes twinkle { 0%, 100% { opacity: 0; transform: scale(.4) } 50% { opacity: 1; transform: scale(1) } }
+@keyframes drip { 0% { transform: translateY(-4px); opacity: 0 } 15% { opacity: 1 } 80% { transform: translateY(14px); opacity: 1 } 100% { transform: translateY(16px); opacity: 0 } }
+@keyframes fan { 0%, 100% { transform: rotate(-14deg) } 50% { transform: rotate(16deg) } }
+@keyframes wave { 0%, 100% { transform: rotate(0) } 50% { transform: rotate(-10deg) } }
+@keyframes zz { 0% { transform: translate(0, 6px); opacity: 0 } 30% { opacity: 1 } 100% { transform: translate(10px, -16px); opacity: 0 } }
+@keyframes scan { 0% { transform: translateY(0) } 50% { transform: translateY(118px) } 100% { transform: translateY(0) } }
+@keyframes wobble { 0%, 100% { transform: rotate(-6deg) } 50% { transform: rotate(6deg) } }
+@keyframes pop { 0% { transform: scale(0) } 70% { transform: scale(1.2) } 100% { transform: scale(1) } }
+@keyframes flash { 0% { opacity: .95; transform: scale(.2) } 100% { opacity: 0; transform: scale(2.4) } }
+@keyframes squash { 0% { transform: scale(1, 1) } 25% { transform: scale(1.08, .9) } 55% { transform: scale(.95, 1.08) translateY(-10px) } 100% { transform: scale(1, 1) } }
+@keyframes nod { 0%, 100% { transform: rotate(0) } 30% { transform: rotate(-5deg) } 65% { transform: rotate(4deg) } }
+@keyframes shimmer { 0% { transform: translateX(-60px) } 100% { transform: translateX(120px) } }
+@keyframes sag { 0%, 100% { transform: scale(1, .975) translateY(2px) } 50% { transform: scale(1, .96) translateY(3px) } }
+.mascot .spark { transform-box: fill-box; transform-origin: center }
+.mascot .badge { transform-box: fill-box; transform-origin: center; animation: pop .35s ease-out both }
+
+/* зарядка */
+.mascot[data-state="charging"] .cam { transform: translateY(13px) }
+.mascot[data-state="charging"] .camled { opacity: 1; stroke: #34d399; animation: pulse 1.6s ease-in-out infinite }
+.mascot[data-state="charging"] .p-bolt, .mascot[data-state="charging"] .p-sparks, .mascot[data-state="charging"] .p-shine { display: inline }
+.mascot[data-state="charging"] .p-bolt { animation: pulse 1.6s ease-in-out infinite }
+.mascot[data-state="charging"] .spark { animation: twinkle 1.8s ease-in-out infinite }
+.mascot[data-state="charging"] .spark:nth-child(2) { animation-delay: .6s } .mascot[data-state="charging"] .spark:nth-child(3) { animation-delay: 1.2s }
+.mascot[data-state="charging"] .shine { animation: shimmer 2.6s linear infinite }
+/* держит температуру */
+.mascot[data-state="holding"] .cam { transform: translateY(13px) }
+.mascot[data-state="holding"] .camled { opacity: 1; stroke: #fb923c; animation: pulse 1s ease-in-out infinite }
+.mascot[data-state="holding"] .p-sweat { display: inline; animation: drip 1.6s ease-in infinite }
+.mascot[data-state="holding"] .p-fan { display: inline }
+.mascot[data-state="holding"] .fanw { transform-box: view-box; transform-origin: 26.5px 142px; animation: fan .45s ease-in-out infinite }
+.mascot[data-state="holding"] .blush { fill: #ff6b6b }
+.mascot[data-state="holding"] .eyes .eo { display: none } .mascot[data-state="holding"] .eyes .e-tired { display: inline }
+.mascot[data-state="holding"] .m-smile { display: none } .mascot[data-state="holding"] .m-wavy { display: inline }
+/* пауза из-за нагрева */
+.mascot[data-state="hotpause"] .p-ice, .mascot[data-state="hotpause"] .p-pause { display: inline }
+.mascot[data-state="hotpause"] .dim { opacity: .28 }
+.mascot[data-state="hotpause"] .eyes .eo { display: none } .mascot[data-state="hotpause"] .eyes .e-relax { display: inline }
+.mascot[data-state="hotpause"] .m-smile { display: none } .mascot[data-state="hotpause"] .m-o { display: inline }
+.mascot[data-state="hotpause"] .body { transform-box: view-box; transform-origin: 100px 196px; animation: breathe 3.6s ease-in-out infinite }
+/* лимит */
+.mascot[data-state="limit"] .camled { opacity: 1; stroke: #34d399 }
+.mascot[data-state="limit"] .cam { transform: translateY(20px) }
+.mascot[data-state="limit"] .p-check { display: inline }
+.mascot[data-state="limit"] .eyes .eo { display: none } .mascot[data-state="limit"] .eyes .e-happy { display: inline }
+.mascot[data-state="limit"] .m-smile { display: none } .mascot[data-state="limit"] .m-big { display: inline }
+.mascot[data-state="limit"] .armR { animation: wave .9s ease-in-out infinite }
+/* проблема */
+.mascot[data-state="problem"] .cam { transform: translateY(8px) rotate(-14deg); transform-box: fill-box; transform-origin: 50% 100% }
+.mascot[data-state="problem"] .camled { opacity: 1; stroke: #f87171; animation: blinkled .8s steps(1) infinite }
+.mascot[data-state="problem"] .p-alert { display: inline }
+.mascot[data-state="problem"] .p-alert .bub { transform-box: fill-box; transform-origin: 0% 100%; animation: wobble 1.2s ease-in-out infinite }
+.mascot[data-state="problem"] .eyes .brows { display: inline }
+.mascot[data-state="problem"] .m-smile { display: none } .mascot[data-state="problem"] .m-worry { display: inline }
+/* диагностика */
+.mascot[data-state="diag"] .cam { transform: translateY(0) }
+.mascot[data-state="diag"] .camled { opacity: 1; stroke: #60a5fa; animation: pulse .9s ease-in-out infinite }
+.mascot[data-state="diag"] .p-scan { display: inline } .mascot[data-state="diag"] .scanline { animation: scan 2.4s ease-in-out infinite }
+.mascot[data-state="diag"] .eyes .eo { display: none } .mascot[data-state="diag"] .eyes .e-squint { display: inline }
+.mascot[data-state="diag"] .m-smile { display: none } .mascot[data-state="diag"] .m-flat { display: inline }
+/* ночь */
+.mascot[data-state="night"] .dim { opacity: .55 }
+.mascot[data-state="night"] .p-zzz { display: inline } .mascot[data-state="night"] .z { animation: zz 2.8s ease-in infinite }
+.mascot[data-state="night"] .z:nth-child(2) { animation-delay: .9s } .mascot[data-state="night"] .z:nth-child(3) { animation-delay: 1.8s }
+.mascot[data-state="night"] .eyes .eo { display: none } .mascot[data-state="night"] .eyes .e-sleep { display: inline }
+.mascot[data-state="night"] .m-smile { display: none } .mascot[data-state="night"] .m-o { display: inline }
+.mascot[data-state="night"] .all { animation-duration: 5s }
+/* мало заряда */
+.mascot[data-state="low"] .p-low { display: inline } .mascot[data-state="low"] .lowbar { animation: blinkled 1.4s steps(1) infinite }
+.mascot[data-state="low"] .eyes .eo { display: none } .mascot[data-state="low"] .eyes .e-tired { display: inline }
+.mascot[data-state="low"] .m-smile { display: none } .mascot[data-state="low"] .m-flat { display: inline }
+.mascot[data-state="low"] .body { transform-box: view-box; transform-origin: 100px 196px; animation: sag 2.6s ease-in-out infinite }
+.mascot[data-state="low"] .dim { opacity: .18 }
+/* события поверх состояния */
+.mascot.ev-applied .cam { transform: translateY(0) !important }
+.mascot.ev-applied .p-flash { display: inline } .mascot.ev-applied .flashc { transform-box: fill-box; transform-origin: center; animation: flash .6s ease-out both }
+.mascot.ev-applied .body { transform-box: view-box; transform-origin: 100px 196px; animation: nod .7s ease-in-out }
+.mascot.ev-applied .p-check2 { display: inline }
+.mascot.ev-tap .all { animation: squash .55s ease-out }
+.mascot.ev-tap .cam { transform: translateY(0) !important }
+.mascot.ev-tap .eyes > g { display: none !important } .mascot.ev-tap .eyes .e-wink { display: inline !important }
+/* ===== новый вариант (v2): чёрный AMOLED-экран, светящееся лицо, камера из щели в корпусе, ручки ===== */
+.mascot.v2 { --face: #8be9ff }
+.mascot.v2 .gl { fill: var(--face); transition: fill .4s }
+.mascot.v2 .gls { stroke: var(--face); transition: stroke .4s }
+.mascot.v2 .face { transition: opacity .5s }
+.mascot.v2[data-state="charging"], .mascot.v2[data-state="limit"] { --face: #7cf0b0 }
+.mascot.v2[data-state="holding"] { --face: #ffbe7a }
+.mascot.v2[data-state="hotpause"] { --face: #a9dcff }
+.mascot.v2[data-state="problem"] { --face: #ffc58a }
+.mascot.v2[data-state="diag"] { --face: #8ab4ff }
+.mascot.v2[data-state="night"] { --face: #b9a6ff }
+.mascot.v2[data-state="low"] { --face: #ffa3a3 }
+.mascot.v2[data-state] .camled { opacity: .75; stroke: var(--face) }
+.mascot.v2[data-state="calm"] .cam { transform: translateY(14px) }
+.mascot.v2[data-state="charging"] .cam, .mascot.v2[data-state="holding"] .cam { transform: translateY(6px) }
+.mascot.v2[data-state="limit"] .cam { transform: translateY(9px) }
+.mascot.v2[data-state="hotpause"] .cam, .mascot.v2[data-state="night"] .cam { transform: translateY(30px) }
+.mascot.v2[data-state="low"] .cam { transform: translateY(22px) }
+.mascot.v2[data-state="diag"] .cam { transform: translateY(0) }
+.mascot.v2[data-state="problem"] .cam { transform: translateY(10px) }
+.mascot.v2[data-state="night"] .face { opacity: .5 } .mascot.v2[data-state="hotpause"] .face { opacity: .85 }
+/* проблема: без бровей и хмурого рта — растерянный, а не злой */
+.mascot.v2[data-state="problem"] .eyes .brows { display: none }
+.mascot.v2[data-state="problem"] .m-worry { display: none } .mascot.v2[data-state="problem"] .m-wavy { display: inline }
+.mascot.v2[data-state="problem"] .p-sweat { display: inline; animation: drip 1.8s ease-in infinite }
+.mascot.v2[data-state="problem"] .pupils { transform: translate(0, -2px) }
+/* ручки: вращаются вокруг плеча */
+.mascot.v2 .armL, .mascot.v2 .armR { transform-box: view-box; transition: transform .35s ease }
+.mascot.v2 .armL { transform-origin: 50px 124px } .mascot.v2 .armR { transform-origin: 150px 124px }
+.mascot.v2 .strA { fill: none }
+@keyframes swingL { 0%, 100% { transform: rotate(-3deg) } 50% { transform: rotate(4deg) } }
+@keyframes swingR { 0%, 100% { transform: rotate(3deg) } 50% { transform: rotate(-4deg) } }
+@keyframes holdFan { 0%, 100% { transform: rotate(70deg) } 50% { transform: rotate(76deg) } }
+@keyframes waveR { 0%, 100% { transform: rotate(-80deg) } 50% { transform: rotate(-105deg) } }
+@keyframes spin { to { transform: rotate(360deg) } }
+@keyframes windp { 0%, 100% { opacity: .2; transform: translateX(0) } 50% { opacity: 1; transform: translateX(4px) } }
+@keyframes fall { 0% { transform: translateY(-6px); opacity: 0 } 25% { opacity: 1 } 100% { transform: translateY(16px); opacity: 0 } }
+.mascot.v2 .armL { animation: swingL 3s ease-in-out infinite } .mascot.v2 .armR { animation: swingR 3s ease-in-out infinite }
+.mascot.v2[data-state="holding"] .armL { animation: holdFan .9s ease-in-out infinite }
+.mascot.v2[data-state="limit"] .armR { animation: waveR .8s ease-in-out infinite }
+.mascot.v2[data-state="problem"] .armL { animation: none; transform: rotate(35deg) } .mascot.v2[data-state="problem"] .armR { animation: none; transform: rotate(-35deg) }
+.mascot.v2[data-state="hotpause"] .armL, .mascot.v2[data-state="hotpause"] .armR, .mascot.v2[data-state="night"] .armL, .mascot.v2[data-state="night"] .armR { animation: none; transform: rotate(0) }
+.mascot.v2[data-state="holding"] .p-fan { display: inline }
+.mascot.v2 .blades { transform-box: view-box; transform-origin: 23.5px 80px; animation: spin .35s linear infinite }
+.mascot.v2 .wind path { animation: windp .7s ease-in-out infinite } .mascot.v2 .wind path:nth-child(2) { animation-delay: .35s }
+.mascot.v2[data-state="hotpause"] .p-snow { display: inline }
+.mascot.v2 .p-snow > g { animation: fall 2.6s linear infinite }
+.mascot.v2 .p-snow > g:nth-child(2) { animation-delay: .7s } .mascot.v2 .p-snow > g:nth-child(3) { animation-delay: 1.4s } .mascot.v2 .p-snow > g:nth-child(4) { animation-delay: 2s }
+@media (prefers-reduced-motion: reduce) { .mascot *, .mascot .all { animation: none !important; transition: none !important } }/* реакция на «?»: любопытство / curiosity on "?" */
+.mascot .p-q { display: none }
+.mascot.ev-curious .p-q { display: inline; transform-box: view-box; transform-origin: 160px 52px; animation: qpop 1.8s cubic-bezier(.3, 1.5, .5, 1) both }
+@keyframes qpop { 0% { transform: scale(0); opacity: 0 } 15% { transform: scale(1.1); opacity: 1 } 25%, 85% { transform: scale(1) } 100% { transform: scale(.6); opacity: 0 } }
+.mascot.ev-curious .all { transform-box: view-box; transform-origin: 100px 210px; animation: tilt 1.8s ease-in-out both }
+@keyframes tilt { 0%, 100% { transform: rotate(0) } 20%, 45% { transform: rotate(-9deg) translateY(-3px) } 60%, 85% { transform: rotate(7deg) } }
+.mascot.ev-curious .cam { transform: translateY(0) !important }
+.mascot.ev-curious .eo { transform-box: fill-box; transform-origin: center; animation: wide 1.8s ease-in-out both }
+@keyframes wide { 0%, 100% { transform: scale(1) } 15%, 85% { transform: scale(1.18) } }
+.mascot.ev-curious .mouth > * { display: none !important } .mascot.ev-curious .m-o { display: inline !important }
+.mascot.v2.ev-curious .armR { animation: none; transform: rotate(-115deg) }
+@media (prefers-reduced-motion: reduce) { .mascot.ev-curious .all, .mascot.ev-curious .eo, .mascot .p-q { animation: none !important } }
