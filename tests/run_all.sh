@@ -2,7 +2,7 @@
 # Все проверки перед сборкой / all checks before a build
 set -e
 cd "$(dirname "$0")/.."
-echo "== shellcheck"; shellcheck -s busybox -S warning -e SC2034,SC2154,SC1090,SC1091,SC2086,SC2155 module/*.sh && echo "shellcheck: OK"
+echo "== shellcheck"; SHL=busybox; echo | shellcheck -s busybox - >/dev/null 2>&1 || SHL=dash; shellcheck -s $SHL -S warning -e SC2034,SC2154,SC1090,SC1091,SC2086,SC2155 module/*.sh && echo "shellcheck: OK"
 echo "== синтаксис / syntax"; for f in module/*.sh; do busybox ash -n "$f"; done; echo "syntax: OK"
 echo "== служба / service"; bash tests/test_daemon.sh | tail -n 1
 echo "== бэкенд / backend"; bash tests/test_backend.sh | tail -n 1

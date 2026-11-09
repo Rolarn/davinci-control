@@ -69,7 +69,7 @@ EOF
   printf '#!/bin/sh\ncase "$1" in -v) echo 31.1;; -V) echo 31100;; esac\n' > $R/bin/magisk
   printf '#!/bin/bash\n[ "$1" = 2000 ] && bash -c "$3"\n' > $R/bin/su
   if [ -n "$1" ]; then sed "s|@R@|$R|g" "$1" > $R/bin/sleep; else printf '#!/bin/sh\ntrue\n' > $R/bin/sleep; fi
-  chmod +x $R/bin/*
+  find $R/bin -type f -exec chmod +x {} +
   export R
 }
 # Запуск службы в стенде / run the daemon on the bench

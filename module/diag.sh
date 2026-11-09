@@ -101,7 +101,7 @@ step "Battery stats since last charge"
 dumpsys batterystats --charged 2>/dev/null | head -n 2500
 
 step "Load"
-top -b -n 1 -m 25 2>/dev/null | head -n 32
+top -b -n 1 2>/dev/null | head -n 32
 h "Android errors (last 150)"; logcat -d -b main,system -t 150 '*:E' 2>/dev/null
 h "Kernel log (last 120)"; dmesg 2>/dev/null | tail -n 120
 
