@@ -1,0 +1,38 @@
+# Релиз по тегу vX.Y.Z: проверки, zip, страница релиза (сначала RU, потом EN), update.json в main.
+# Release on a vX.Y.Z tag: checks, zip, release page (RU first, then EN), update.json on main.
+name: release
+on:
+  push:
+    tags: ['v*']
+permissions:
+  contents: write
+jobs:
+  release:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - name: Version matches tag
+        run: |
+          v=$(sed -n 's/^version=//p' module/module.prop)
+          [ "$v" = "${GITHUB_REF_NAME}" ] || { echo "module.prop $v ≠ tag ${GITHUB_REF_NAME}"; exit 1; }
+      - name: Tools
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq busybox shellcheck zip
+          npm install --no-save playwright@1.49.1
+          npx playwright install --with-deps chromium
+      - name: Tests
+        run: bash tests/run_all.sh
+      - name: Build
+        run: |
+          scripts/build.sh
+          scripts/release-notes.sh "$(cat dist/*.zip.sha256)" > notes.md
+      - name: Release
+        env: { GH_TOKEN: '${{ github.token }}' }
+        run: gh release create "${GITHUB_REF_NAME}" dist/*.zip --title "Davinci Control ${GITHUB_REF_NAME#v}" --notes-file notes.md --latest
+      - name: update.json → main
+        run: |
+          git fetch origin main && git checkout main
+          scripts/update-json.sh
+          git config user.name "github-actions[bot]"; git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add update.json && git commit -m "update.json → ${GITHUB_REF_NAME}" && git push origin main || echo "update.json без изменений / unchanged"

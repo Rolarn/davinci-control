@@ -1,0 +1,28 @@
+# Проверки и тестовая сборка на каждый push. Zip — во вложениях запуска (artifact), это не релиз.
+# Checks and a test build on every push. The zip is a run artifact, not a release.
+name: ci
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Tools
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq busybox shellcheck zip
+          npm install --no-save playwright@1.49.1
+          npx playwright install --with-deps chromium
+      - name: Tests
+        run: bash tests/run_all.sh
+      - name: Build
+        run: scripts/build.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: davinci-control-test-${{ github.sha }}
+          path: dist/*
+          retention-days: 14

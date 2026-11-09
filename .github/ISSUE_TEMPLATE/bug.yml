@@ -1,0 +1,26 @@
+name: "🐞 Ошибка · Bug"
+description: "Что-то работает не так · Something works wrong"
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Приложи файл диагностики: панель → «Журнал и диагностика» → «Диагностика». Он в «Загрузки/davinci-control». Почта, IP и MAC в нём скрыты, но просмотри файл перед отправкой.
+        Attach the diagnostics file: panel → Log and diagnostics → Diagnostics. It is in Download/davinci-control. E-mail, IP and MAC are masked, but look through the file before sending.
+  - type: textarea
+    id: what
+    attributes:
+      label: "Что случилось · What happened"
+      description: "Что ты делал, что ожидал, что получилось · What you did, what you expected, what happened"
+    validations: { required: true }
+  - type: input
+    id: env
+    attributes:
+      label: "Прошивка, ядро, root · ROM, kernel, root"
+      placeholder: "PixelOS 15, VantomKernel 4.14.356, Magisk 31.1"
+    validations: { required: true }
+  - type: textarea
+    id: files
+    attributes:
+      label: "Диагностика или журнал · Diagnostics or log"
+      description: "Перетащи файл сюда · Drop the file here"

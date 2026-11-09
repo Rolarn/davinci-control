@@ -1,0 +1,10 @@
+name: "💡 Идея · Idea"
+description: "Что добавить или улучшить · What to add or improve"
+labels: [idea]
+body:
+  - type: textarea
+    id: idea
+    attributes:
+      label: "Идея · Idea"
+      description: "Что и зачем · What and why"
+    validations: { required: true }
