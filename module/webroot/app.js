@@ -121,7 +121,8 @@ function buildControls() {
     if (data && data.conf.hot === v) return;
     apply('hot', 'hot ' + v, v, d => d.conf.hot === v, $('hotConf'));
   });
-  makeBtns($('prof'), '', Object.keys(PROFILES).map(k => [k, t('p_' + k)]), k => {
+  makeBtns($('prof'), '', Object.keys(PROFILES).map(k => [k, t('p_' + k)]).concat([['custom', t('p_own')]]), k => {
+    if (k === 'custom') { const f = $('fineBox'); f.open = true; setTimeout(() => f.scrollIntoView({ behavior: 'smooth', block: 'start' }), 60); return; }
     const p = PROFILES[k];
     if (data && curProfile(data.conf) === k) return;
     apply('prof', 'profile ' + k, k, d => d.conf.littleMax === p.l && (d.conf.bigMax || 0) === p.b, $('profConf'));
@@ -270,15 +271,24 @@ addEventListener('pointerdown', e => look(e.clientX, e.clientY), { passive: true
 function problems(d) {
   const p = [], c = d.charge, b = d.batt, cc = d.cc || {}, ok = d.ok || {};
   if (!d.daemon) p.push({ lvl: 'bad', text: t('p_daemon'), go: 'cLog' });
-  if (ok.powerhint !== '3' && ok.powerhint !== '-' && ok.powerhint != null) p.push({ lvl: 'warn', text: t('p_ph', ok.powerhint), go: 'cPerf' });
+  if (ok.powerhint !== '3' && ok.powerhint !== '-' && ok.powerhint != null) p.push({ id: 'ph', lvl: 'warn', text: t('p_ph', ok.powerhint), go: 'cPerf' });
   if (!c.switch) p.push({ lvl: 'bad', text: t('p_nosw'), go: 'cCharge' });
-  if (cc.ok === 2) p.push({ lvl: 'warn', text: t('p_skip'), go: 'cCharge' });
-  else if (cc.ok === 0 && cc.smart === 1) p.push({ lvl: 'warn', text: t('p_ccrej'), go: 'cCharge' });
-  if (ok.thermal === 'nomount') p.push({ lvl: 'warn', text: t('p_nomount'), go: 'cCharge' });
-  if (ok.thermal !== 'stock' && d.conf.hot === 0) p.push({ lvl: 'warn', text: t('p_noprot'), go: 'cCharge' });
+  if (cc.ok === 2) p.push({ id: 'skip', lvl: 'warn', text: t('p_skip'), go: 'cCharge' });
+  else if (cc.ok === 0) p.push({ id: 'ccrej', lvl: 'warn', text: t('p_ccrej'), go: 'cCharge' });
+  if (ok.thermal === 'nomount') p.push({ id: 'nomount', lvl: 'warn', text: t('p_nomount'), go: 'cCharge' });
+  if (ok.thermal !== 'stock' && d.conf.hot === 0) p.push({ id: 'noprot', lvl: 'warn', text: t('p_noprot'), go: 'cCharge' });
   if (b.temp >= 450) p.push({ lvl: 'warn', text: t('p_hot', dec(b.temp / 10, 1), b.status === 'Charging' ? t('p_hot_chg') : t('p_hot_idle')), go: 'cNow' });
-  if (d.conf.drainAlert === 1 && d.drainAlert && d.drainAlert.length === 2) p.push({ lvl: 'warn', text: t('p_drain', d.drainAlert[0], d.drainAlert[1]), go: 'cUse' });
-  return p;
+  if (d.conf.drainAlert === 1 && d.drainAlert && d.drainAlert.length === 2) p.push({ id: 'drain', lvl: 'warn', text: t('p_drain', d.drainAlert[0], d.drainAlert[1]), go: 'cUse' });
+  // «Понятно» прячет предупреждение, пока оно не исчезнет и не появится снова
+  // “Got it” hides a warning until it goes away and comes back
+  const acked = (d.conf.ack || '').split(' ').filter(Boolean), ids = p.map(x => x.id);
+  for (const a of acked) if (!ids.includes(a) && !ackBusy[a]) { ackBusy[a] = 1; sh(`sh ${T} ack -${a}`).then(() => { d.conf.ack = (d.conf.ack || '').split(' ').filter(x => x !== a).join(' '); }).finally(() => { delete ackBusy[a]; }); }
+  return p.filter(x => !acked.includes(x.id));
+}
+const ackBusy = {};
+async function ack(id) {
+  if (data) { data.conf.ack = ((data.conf.ack || '') + ' ' + id).trim(); render(data); }
+  try { await sh(`sh ${T} ack ${id}`); } catch (e) { toast(t('error', e.message)); }
 }
 function goTo(id) { const el = $(id); el.scrollIntoView({ behavior: 'smooth', block: 'start' }); el.classList.add('flash'); setTimeout(() => el.classList.remove('flash'), 1400); }
 let lastProb = '', probGo = null;
@@ -289,7 +299,10 @@ function renderProblems(list) {
   for (const pr of list) {
     const div = document.createElement('div'); div.className = 'prob ' + pr.lvl;
     const s = document.createElement('span'); s.textContent = pr.text; div.appendChild(s);
-    if (pr.go) { const b = document.createElement('button'); b.type = 'button'; b.textContent = t('show'); b.addEventListener('click', () => goTo(pr.go)); div.appendChild(b); }
+    const acts = document.createElement('div'); acts.className = 'acts';
+    if (pr.go) { const b = document.createElement('button'); b.type = 'button'; b.textContent = t('show'); b.addEventListener('click', () => goTo(pr.go)); acts.appendChild(b); }
+    if (pr.id && pr.lvl === 'warn') { const b = document.createElement('button'); b.type = 'button'; b.className = 'ok'; b.textContent = t('gotit'); b.addEventListener('click', () => { div.classList.add('out'); setTimeout(() => ack(pr.id), 260); }); acts.appendChild(b); }
+    div.appendChild(acts);
     box.appendChild(div);
   }
 }
@@ -338,7 +351,17 @@ function items(el, rows, empty) {
     li.appendChild(b); li.appendChild(document.createTextNode(text)); el.appendChild(li);
   }
 }
-const amps = (d, lvl) => d.dt && d.dt.fcc && d.dt.fcc[lvl] ? dec(d.dt.fcc[lvl] / 1e6, 1) : '';
+// какую таблицу ядро берёт для этого блока (smblib_therm_charging) / which table the kernel uses for this charger
+function dtFor(d) {
+  const dt = d.dt || {}, ty = (d.usb || {}).REAL_TYPE || '', pick = k => dt[k] && dt[k].length ? [k, dt[k]] : null;
+  if (ty === 'USB_HVDCP_3') return pick('qc3') || pick('fcc');
+  if (ty === 'USB_HVDCP_3P5') return pick('qc3cp') || pick('fcc');
+  if (ty === 'USB_HVDCP') return pick('qc2') || pick('fcc');
+  if (ty === 'USB_DCP') return pick('dcp') || pick('fcc');
+  if (ty === 'USB_PD') return pick('pd') || pick('fcc');
+  return pick('qc3') || pick('fcc');
+}
+const amps = (d, lvl) => { const x = dtFor(d); return x && x[1][lvl] ? dec(x[1][lvl] / 1e6, 1) : ''; };
 function limiters(d) {
   const b = d.batt, bat = d.bat || {}, cc = d.cc || {}, out = [];
   const H = bat.HEALTH, DH = bat.DIE_HEALTH, ct = d.chips && d.chips.pmic;
@@ -454,7 +477,8 @@ function render(d) {
     return [tm(+s0), t('sess_line', c0, c1, fmtH(dur), rate, dec(ma / 1000, 1), dec(tmax / 10, 1), chn ? t('sess_ch', chn + ' · ' + t('mode_' + mode)) : ' · ' + t('mode_' + mode), +scr > 0 ? t('sess_scr', scr) : '', +jl > 0 ? t('sess_jl', jl) : '')];
   }), t('sess_none'));
   // таблица тока / current table
-  const fcc = (d.dt && d.dt.fcc) || [];
+  const dtx = dtFor(d), fcc = dtx ? dtx[1] : [];
+  $('dtName').textContent = dtx ? t('dt_' + dtx[0]) : '';
   $('dtTable').innerHTML = fcc.length ? '<div class="dtt">' + fcc.slice(0, 16).map((v, i) => `<div class="${cc.lvl === i ? 'cur' : ''}">${esc(t('dt_lvl', i))}<b>${v ? dec(v / 1e6, 1) + ' A' : '0'}</b></div>`).join('') + '</div>' : `<div class="empty">${t('dt_none')}</div>`;
 
   // яркость / brightness
@@ -467,7 +491,8 @@ function render(d) {
   // производительность / performance
   if (!freqsBuilt && d.littleFreqs && d.littleFreqs.length && d.bigFreqs && d.bigFreqs.length) buildFreqs(d.littleFreqs, d.bigFreqs);
   const pk = pend('prof') ?? curProfile(cf); mark($('prof'), pk);
-  $('profHint').textContent = pk === 'custom' ? t('p_custom') : t('ph_' + pk);
+  const limTxt = v => v ? mhz(v) + (LANG === 'en' ? ' MHz' : ' МГц') : t('nolim').toLowerCase();
+  $('profHint').textContent = pk === 'custom' ? t('p_custom', limTxt(cf.littleMax), limTxt(cf.bigMax || 0)) : t('ph_' + pk);
   mark($('little'), pend('little') ?? cf.littleMax); mark($('big'), pend('big') ?? (cf.bigMax || 0));
   const bmaxHw = (d.bigFreqs || [0]).slice(-1)[0];
   $('nL').textContent = t('of_mhz', mhz(nw.little), mhz(nw.littleMax));

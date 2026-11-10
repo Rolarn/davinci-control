@@ -26,7 +26,7 @@ SWITCHES="charging_enabled:1:0 battery_charging_enabled:1:0 input_suspend:0:1"
 
 defaults() {
   CHARGE_LIMIT=80; CHARGE_RESUME=75; HOT_PAUSE=42; HOT_RESUME=38; USB_FAST=1; LITTLE_MAX=1612800; BIG_MAX=0
-  BRIGHT_CHARGE=0; AUTO_BATT=1; SAVER_BATT=1; THERMAL_CHG=0; CC_SMART=1; UI_LANG=auto; SKIN=blue; DRAIN_ALERT=1
+  BRIGHT_CHARGE=0; AUTO_BATT=1; SAVER_BATT=1; THERMAL_CHG=0; CC_SMART=1; UI_LANG=auto; SKIN=blue; DRAIN_ALERT=1; ACK=""
 }
 load_conf() { defaults; [ -f "$CONF" ] && . "$CONF"; }
 write_default_conf() {
@@ -57,6 +57,12 @@ version() { sed -n 's/^version=//p' "$MODDIR/module.prop" 2>/dev/null; }
 vcode() { sed -n 's/^versionCode=//p' "$MODDIR/module.prop" 2>/dev/null; }
 trim() { [ -f "$1" ] && [ "$(wc -l < "$1")" -gt "$2" ] && tail -n "$2" "$1" > "$1.t" && mv "$1.t" "$1"; }
 
+# Имя файла для «Загрузок»; если такое уже есть (две записи за минуту) — суффикс _2, _3…
+# File name for Download; if it exists (two saves within a minute) — a _2, _3… suffix
+outname() {
+  f=$OUT/davinci-control_$(version)_$1_$(date +%Y-%m-%d_%H%M); n=1; x=$f.txt
+  while [ -e "$x" ]; do n=$((n + 1)); x=${f}_$n.txt; done; echo "$x"
+}
 # ---------- язык / language ----------
 ui_lang() {
   case "$UI_LANG" in ru|en) echo "$UI_LANG"; return ;; esac
@@ -126,8 +132,10 @@ backlight_max() { for f in $R/sys/class/backlight/*/max_brightness; do rd "$f"; 
 HBM=$R/sys/devices/platform/soc/soc:qcom,dsi-display/hbm
 set_hbm() { [ -f $HBM ] || return 1; echo "$1" > $HBM 2>/dev/null; }
 # Температуры микросхем, °C×10: зарядка PM6150, зарядный насос SMB1390, разъём. / chip temperatures, °C×10.
-t_pmic() { v=$(rd $B/charger_temp); [ -n "$v" ] && echo "$v"; }
-t_cp() { v=$(rd $CP/temp); [ -z "$v" ] && v=$(sed -n 's/^POWER_SUPPLY_TEMP=//p' $CP/uevent 2>/dev/null); [ -n "$v" ] && echo "$v"; }
+# АЦП иногда отвечает ошибкой — одна повторная попытка / the ADC sometimes errors — one retry
+t_pmic() { v=$(rd $B/charger_temp); [ -n "$v" ] || v=$(rd $B/charger_temp); [ -n "$v" ] && echo "$v"; }
+# у SMB1390 температура есть только пока насос включён / SMB1390 reports temperature only while enabled
+t_cp() { [ "$(rd $CP/cp_enable)" = 1 ] || return 0; v=$(rd $CP/cp_die_temp); [ -n "$v" ] && echo "$v"; }
 t_conn() { v=$(rd $U/connector_temp); [ -n "$v" ] && { echo "$v"; return; }; zt10 conn_therm usb_conn_therm usb-therm; }
 sims() { getprop gsm.sim.state 2>/dev/null | tr ',' '\n' | grep -cE 'LOADED|READY'; }
 
@@ -147,8 +155,15 @@ net_rx() {  # $1 = шаблон интерфейса / interface glob
 }
 
 # Ступень ограничения тока (рычаг заводской термозащиты). / charge current level (the stock thermal lever).
-CCL=$B/system_temp_level; [ -f $CCL ] || CCL=$B/charge_control_limit
-CCLMAX=$B/num_system_temp_levels; [ -f $CCLMAX ] || CCLMAX=$B/charge_control_limit_max
+# charge_control_limit в sysfs только для чтения (ядро не даёт права записи даже root). Рабочий путь —
+# охлаждающее устройство «battery»: его cur_state ядро передаёт в тот же CHARGE_CONTROL_LIMIT.
+# charge_control_limit is read-only in sysfs (no write bit, even for root). The working path is the
+# "battery" cooling device: the kernel passes its cur_state to the same CHARGE_CONTROL_LIMIT.
+CCL=""; CCLMAX=""; CCLN=""
+for c in $R/sys/class/thermal/cooling_device*; do
+  [ "$(cat "$c/type" 2>/dev/null)" = battery ] && { CCL=$c/cur_state; CCLMAX=$c/max_state; CCLN="${c##*/}(battery)"; break; }
+done
+[ -n "$CCL" ] || { CCL=$B/system_temp_level; CCLMAX=$B/num_system_temp_levels; CCLN=system_temp_level; }
 CC_TOP=12                        # 15+ ядро останавливает зарядку — выше 12 не ставим / never above 12
 REG_HI=440; REG_LO=425; REG_MIN=8   # удержание «Быстро» / fast-mode hold
 CC_STEPS="410:4 430:8 450:12"    # «Бережно»: °C×10 → ступень / care mode steps
@@ -168,12 +183,16 @@ thermal_match() {
   done < "$MODDIR/thermal/orig.sha256"
 }
 # Таблицы тока по ступеням из device tree (мкА). / per-level current tables from the device tree (µA).
-dt_table() {
-  f=$(find $R/proc/device-tree/ -name "qcom,thermal-mitigation$1" 2>/dev/null | head -n 1)
+dt_table() {  # $1 = имя свойства / property name
+  f=$(find $R/proc/device-tree/ -name "$1" 2>/dev/null | head -n 1)
   [ -n "$f" ] && od -An -v -tu1 "$f" 2>/dev/null | awk '{ for (i = 1; i <= NF; i++) { v = v * 256 + $i; if (++n % 4 == 0) { printf "%s%d", (n > 4 ? " " : ""), v; v = 0 } } } END { print "" }'
 }
 # Кэш таблиц device tree (один раз за загрузку). / device tree tables cache (once per boot).
 dt_cache() {
   [ -f $D/dt.tables ] && return
-  { echo "fcc=$(dt_table '')"; echo "dcp=$(dt_table -dcp)"; echo "qc2=$(dt_table -qc2)"; echo "icl=$(dt_table -icl)"; } > $D/dt.tables
+  # по типу блока ядро берёт свою таблицу (smblib_therm_charging) / the kernel picks a table by charger type
+  for x in fcc:qcom,thermal-mitigation qc3:qcom,thermal-fcc-qc3-normal qc3cp:qcom,thermal-fcc-qc3-cp qc2:qcom,thermal-mitigation-qc2 \
+           dcp:qcom,thermal-mitigation-dcp pd:qcom,thermal-mitigation-pd-base; do
+    echo "${x%%:*}=$(dt_table "${x#*:}")"
+  done > $D/dt.tables
 }

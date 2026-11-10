@@ -10,9 +10,10 @@ check "json валиден / json is valid" "echo '$J' | python3 -c 'import json
 check "live валиден / live is valid" "echo '$L' | python3 -m json.tool >/dev/null"
 check "строки: оба языка / strings: both languages" "echo '$S' | python3 -c 'import json,sys; d=json.load(sys.stdin); assert all(len(v)==2 and v[0] and v[1] for v in d.values()) and len(d)>70'"
 check "температуры микросхем / chip temperatures" "echo '$J' | python3 -c 'import json,sys; c=json.load(sys.stdin)[\"chips\"]; assert c==dict(pmic=420,cp=380,conn=350), c'"
-check "таблица тока из device tree / DT current table" "echo '$J' | python3 -c 'import json,sys; t=json.load(sys.stdin)[\"dt\"][\"fcc\"]; assert t[8]==2700000 and t[12]==2000000, t'"
+check "таблица тока из device tree / DT current table" "echo '$J' | python3 -c 'import json,sys; t=json.load(sys.stdin)[\"dt\"]; assert t[\"qc3\"][8]==2700000 and t[\"qc3\"][12]==2000000 and t[\"fcc\"][8]==2600000, t'"
 check "SIM: 2 / SIMs: 2" "echo '$J' | python3 -c 'import json,sys; assert json.load(sys.stdin)[\"sims\"]==2'"
 
+check "рычаг тока — охлаждающее устройство / level lever is the cooling device" "echo '$J' | python3 -c 'import json,sys; assert json.load(sys.stdin)[\"cc\"][\"node\"]==\"cooling_device5(battery)\"'"
 echo "2. Команды настроек / setting commands"
 tune limit 85 >/dev/null; tune chgmode fast >/dev/null; tune lang en >/dev/null; tune skin red >/dev/null; tune profile eco >/dev/null
 C=$R/$D_/config
@@ -22,6 +23,8 @@ check "язык и цвет / language and skin" "grep -q '^UI_LANG=en' $C && gr
 check "профиль «Экономия» / economy profile" "grep -q '^LITTLE_MAX=1324800' $C && [ \$(cat $R/sys/devices/system/cpu/cpufreq/policy6/scaling_max_freq) = 1708800 ]"
 check "ошибка на неверном значении / error on bad value" "! tune limit 20 >/dev/null && ! tune lang de >/dev/null"
 check "текст ошибки на английском / error text in English" "tune limit 20 | grep -q 'A number from 50 to 100'"
+tune ack noprot >/dev/null; tune ack drain >/dev/null; tune ack -noprot >/dev/null
+check "«Понятно» сохраняется и снимается / ack is stored and cleared" "grep -q '^ACK=\"drain\"' $C"
 check "события настроек / setting events" "grep -q 'set_mode_fast' $R/$D_/events.log && grep -q 'set_profile_eco' $R/$D_/events.log"
 
 echo "3. Сохранение журнала / saving the log"
@@ -70,9 +73,9 @@ if [ -d "$O_" ]; then
 else bad "нет tests/fixtures/thermal"; fi
 
 echo "7. Удаление / removal"
-echo 7 > $R/sys/class/power_supply/battery/system_temp_level
+echo 7 > $R/sys/class/thermal/cooling_device5/cur_state
 (PATH=$R/bin $BBX ash -c "sed 's|/sys/|$R/sys/|g; s|/data/adb/|$R/data/adb/|g' $M/uninstall.sh | $BBX ash")
-check "ступень тока 0 / level 0" "[ \$(cat $R/sys/class/power_supply/battery/system_temp_level) = 0 ]"
+check "ступень тока 0 / level 0" "[ \$(cat $R/sys/class/thermal/cooling_device5/cur_state) = 0 ]"
 check "данные модуля удалены / module data deleted" "[ ! -d $R/$D_ ]"
 check "сохранённые логи остались / saved logs stay" "ls $R/sdcard/Download/davinci-control/*.txt >/dev/null"
 

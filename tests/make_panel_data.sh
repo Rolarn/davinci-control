@@ -24,7 +24,7 @@ for i in $(seq 288 -1 1); do s=$((n0 - i * 300)); c=$(( 80 - (288 - i) / 6 )); [
 run_daemon
 echo 0 > $R/step; rm -f $M/disable
 sed -i "s/^cc=0 /cc=10 /; s/ reg=0 / reg=1 /; s/ pl=0 / pl=1 /" $D/state 2>/dev/null
-echo 10 > $R/sys/class/power_supply/battery/system_temp_level; echo 441 > $R/sys/class/power_supply/battery/temp
+echo 10 > $R/sys/class/thermal/cooling_device5/cur_state; echo 441 > $R/sys/class/power_supply/battery/temp
 echo module > $D/thermal.state
 tune json > "$ROOT/tests/out/json.json"; tune strings > "$ROOT/tests/out/strings.json"
 python3 -m json.tool "$ROOT/tests/out/json.json" >/dev/null && echo "panel data: OK"

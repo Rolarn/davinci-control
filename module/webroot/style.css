@@ -44,7 +44,11 @@ main { max-width: 560px; margin: 0 auto; padding: 4px 14px 40px }
 #problems:empty { display: none }
 .prob { display: flex; gap: 10px; align-items: center; justify-content: space-between; padding: 11px 13px; border-radius: 14px; font-size: 14px; font-weight: 500; animation: fadein .4s var(--ease) }
 .prob.bad { background: var(--bad-weak); color: var(--bad) } .prob.warn { background: var(--warn-weak); color: var(--warn) }
+.prob { transition: opacity .25s ease, transform .25s ease, max-height .3s ease; max-height: 300px }
+.prob.out { opacity: 0; transform: translateX(16px) }
+.prob .acts { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; flex: none }
 .prob button { border: 0; background: transparent; color: inherit; font-weight: 700; padding: 6px 0; white-space: nowrap }
+.prob button.ok { opacity: .8; font-weight: 600 }
 .prob > span { min-width: 0; overflow-wrap: anywhere }
 @keyframes fadein { from { opacity: 0; transform: translateY(-4px) } to { opacity: 1; transform: none } }
 
@@ -83,8 +87,9 @@ main { max-width: 560px; margin: 0 auto; padding: 4px 14px 40px }
 .conf.wrap { white-space: normal }
 .conf.ok { color: var(--ok) } .conf.wait { color: var(--muted) } .conf.bad { color: var(--bad) }
 input[type=range] { width: 100%; accent-color: var(--accent); height: 34px; margin: 0 }
-.seg { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; background: var(--sub); border-radius: 12px; padding: 3px; gap: 3px }
-.seg button { border: 0; background: transparent; border-radius: 10px; padding: 9px 4px; min-height: 40px; font-size: 14px; color: var(--muted); font-weight: 600; transition: background .25s, color .25s, box-shadow .25s }
+.seg { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); background: var(--sub); border-radius: 12px; padding: 3px; gap: 3px }
+#prof button { font-size: 13px; padding-inline: 2px }
+.seg button { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; border: 0; background: transparent; border-radius: 10px; padding: 9px 4px; min-height: 40px; font-size: 14px; color: var(--muted); font-weight: 600; transition: background .25s, color .25s, box-shadow .25s }
 .seg button.on { background: var(--card); color: var(--text); box-shadow: 0 1px 3px rgba(0, 0, 0, .25) }
 .chips { display: flex; flex-wrap: wrap; gap: 6px }
 .chip { border: 1px solid var(--line); background: transparent; border-radius: 99px; padding: 7px 12px; min-height: 38px; font-size: 14px; transition: background .25s, color .25s }

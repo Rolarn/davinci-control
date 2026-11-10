@@ -1,0 +1,7 @@
+{
+  "modId": "davinci-control",
+  "title": "Davinci Control",
+  "icon": "icon.png",
+  "permissions": ["kernelsu.permission.SHELL"],
+  "pullToRefresh": false
+}

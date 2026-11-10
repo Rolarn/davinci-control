@@ -6,9 +6,17 @@ MODDIR=${MODDIR:-${0%/*}}
 . "$MODDIR/common.sh"
 load_conf
 mkdir -p "$D" "$OUT"
-F=$OUT/davinci-control_$(version)_diag_$(date +%Y-%m-%d_%H%M).txt
+F=$(outname diag)
 TMP=$D/diag.tmp
 STEPS=12; n=0
+# Не дать телефону уснуть и не попасть под «заморозку» фонового приложения панели: блокировка сна на время
+# сбора и выход из группы процессов приложения. / Keep the phone awake while collecting and leave the panel
+# app's cgroup so the app freezer does not pause us when the panel goes to the background.
+WL=davinci_control_diag
+# с тайм-аутом 5 мин: даже если процесс убьют, блокировка снимется сама / 5 min timeout: released even if killed
+{ echo "$WL 300000000000" > $R/sys/power/wake_lock; } 2>/dev/null
+{ echo $$ > $R/sys/fs/cgroup/cgroup.procs; } 2>/dev/null
+trap '{ echo $WL > $R/sys/power/wake_unlock; } 2>/dev/null' EXIT
 step() { n=$((n + 1)); echo "$n/$STEPS" > "$D/diag.status"; printf '\n\n########## %s. %s ##########\n' "$n" "$*"; }
 h() { printf '\n===== %s =====\n' "$*"; }
 kv() { for f in "$@"; do [ -r "$f" ] && printf '%s = %s\n' "${f#"$R"}" "$(tr '\n' ' ' < "$f" 2>/dev/null | cut -c1-500)"; done; }
@@ -39,7 +47,9 @@ step "Battery and charging"
 h "battery/uevent"; cat $B/uevent 2>/dev/null
 h "usb/uevent"; cat $U/uevent 2>/dev/null
 h "SMB1390 charge pump"; cat $CP/uevent 2>/dev/null || echo "-"
-for f in $CP/*; do [ -f "$f" ] && [ -r "$f" ] && printf '%s = %s\n' "${f##*/}" "$(head -c 80 "$f" 2>/dev/null | tr '\n' ' ')"; done
+# cp_isns и cp_die_temp при выключенном насосе дёргают АЦП впустую — пропускаем
+# cp_isns and cp_die_temp poke the ADC for nothing while the pump is off — skipped
+for f in $CP/*; do case "${f##*/}" in cp_isns*|cp_die_temp) continue ;; esac; [ -f "$f" ] && [ -r "$f" ] && printf '%s = %s\n' "${f##*/}" "$(head -c 80 "$f" 2>/dev/null | tr '\n' ' ')"; done
 h "Chip temperatures (°C×10)"; echo "battery=$(rd $B/temp) pm6150=$(t_pmic) smb1390=$(t_cp) connector=$(t_conn)"
 h "Writable power_supply nodes"
 for f in $B/* $U/* $R/sys/class/power_supply/main/*; do [ -f "$f" ] && case "$(stat -c %A "$f" 2>/dev/null)" in -rw*) printf '%s = %s\n' "${f#*/power_supply/}" "$(head -c 80 "$f" 2>/dev/null | tr '\n' ' ')" ;; esac; done
@@ -50,16 +60,21 @@ kv $DISABLE_THERMAL $SKIP_THERMAL
 [ -f $DISABLE_THERMAL ] || echo "disable_thermal: -"; [ -f $SKIP_THERMAL ] || echo "skip_thermal: - (not VantomKernel)"
 case "$(rd $SKIP_THERMAL)" in 1|Y|y) echo "WARNING: skip_thermal is on — current levels are accepted but ignored" ;; esac
 case "$(rd $DISABLE_THERMAL)" in 1|Y|y) echo "WARNING: disable_thermal is on — current levels are rejected" ;; esac
-h "Does the kernel accept a level (write 1, read back; level 1 does not affect charging)"
+h "Does the kernel accept a level via $CCLN (write 1, read back; level 1 does not affect charging)"
 o=$(rd "$CCL")
 if [ "$o" = 0 ]; then
   e=$( { echo 1 > "$CCL"; } 2>&1 ); r=$(rd "$CCL"); echo 0 > "$CCL" 2>/dev/null
-  if [ "$r" = 1 ]; then echo "${CCL##*/}: ACCEPTS"; else echo "${CCL##*/}: REJECTS (read «$r», error: ${e:-none})"; fi
-else echo "${CCL##*/} = $o, test skipped"; fi
+  if [ "$r" = 1 ]; then echo "$CCLN: ACCEPTS"; else echo "$CCLN: REJECTS (read «$r», error: ${e:-none})"; fi
+else echo "$CCLN = $o, test skipped"; fi
+echo "battery/charge_control_limit (sysfs, read-only by design) = $(rd $B/charge_control_limit)"
 h "Device tree current tables (µA per level)"
 dt_cache; cat "$D/dt.tables" 2>/dev/null
 h "Thermal configs"; echo "state: $(rd "$D/thermal.state")"
-while read -r hh f; do printf '%s %s\n' "$f" "$( [ "$(sha256sum "$R/vendor/etc/$f" 2>/dev/null | cut -d' ' -f1)" = "$hh" ] && echo stock-tested || echo other)"; done < "$MODDIR/thermal/orig.sha256"
+while read -r hh f; do
+  c=$(sha256sum "$R/vendor/etc/$f" 2>/dev/null | cut -d' ' -f1)
+  if [ "$c" = "$hh" ]; then w=stock-tested; elif [ "$c" = "$(sha256sum "$MODDIR/thermal/$f" 2>/dev/null | cut -d' ' -f1)" ]; then w=module-copy; else w=other; fi
+  printf '%s %s\n' "$f" "$w"
+done < "$MODDIR/thermal/orig.sha256"
 h "pmic-votable"
 for v in $R/sys/kernel/debug/pmic-votable/*; do [ -r "$v/status" ] && { echo "--- ${v##*/}"; head -n 20 "$v/status"; }; done 2>/dev/null
 h "Charging sessions"; cat "$SESS" 2>/dev/null

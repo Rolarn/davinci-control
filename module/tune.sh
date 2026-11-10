@@ -37,7 +37,7 @@ report() {
   echo "switch: $(stv sw) · bad: $(stv bad | tr ',' ' ')"
   echo "limit: $CHARGE_LIMIT% ($CHARGE_RESUME%) · hot: $HOT_PAUSE° ($HOT_RESUME°) · mode: $([ "$CC_SMART" = 1 ] && echo care || echo fast)"
   echo "state: chg=$(stv chg) why=$(stv why) plugged=$(stv pl) full=$([ -f "$D/full" ] && echo 1 || echo 0)"
-  echo "level: ${CCL##*/}=$(rd "$CCL")/$(rd "$CCLMAX") own=$(stv cc) ok=$(stv ccok) hold=$(stv reg)"
+  echo "level: $CCLN=$(rd "$CCL")/$(rd "$CCLMAX") own=$(stv cc) ok=$(stv ccok) hold=$(stv reg)"
   echo "kernel: health=$(sed -n 's/^POWER_SUPPLY_HEALTH=//p' $B/uevent 2>/dev/null) die=$(sed -n 's/^POWER_SUPPLY_DIE_HEALTH=//p' $B/uevent 2>/dev/null)"
   echo "temp °C×10: battery=$(rd $B/temp) pm6150=$(t_pmic) smb1390=$(t_cp) connector=$(t_conn)"
   echo
@@ -79,7 +79,7 @@ jcommon() {
   printf '"usb":%s,"bat":%s,' "$(juev $U/uevent REAL_TYPE ONLINE PRESENT VOLTAGE_NOW INPUT_CURRENT_NOW INPUT_CURRENT_SETTLED PD_ACTIVE QUICK_CHARGE_TYPE HVDCP3_TYPE)" \
     "$(juev $B/uevent HEALTH CHARGE_TYPE DIE_HEALTH INPUT_CURRENT_LIMITED VOLTAGE_MAX)"
   printf '"bl":{"raw":%s,"max":%s},' "$(jnum "$(backlight)")" "$(jnum "$(backlight_max)")"
-  printf '"cc":{"smart":%s,"lvl":%s,"max":%s,"ok":%s,"own":%s,"uev":%s,"reg":%s},' "${CC_SMART:-1}" "$(jnum "$(rd "$CCL")")" "$(jnum "$(rd "$CCLMAX")")" "$(jnum "$(stv ccok)")" "$(jnum "$(stv cc)")" $u "$(jnum "$(stv reg)")"
+  printf '"cc":{"node":"%s","smart":%s,"lvl":%s,"max":%s,"ok":%s,"own":%s,"uev":%s,"reg":%s},' "$CCLN" "${CC_SMART:-1}" "$(jnum "$(rd "$CCL")")" "$(jnum "$(rd "$CCLMAX")")" "$(jnum "$(stv ccok)")" "$(jnum "$(stv cc)")" $u "$(jnum "$(stv reg)")"
   printf '"diag":%s' "$(jstr "$(rd "$D/diag.status")")"
 }
 jhist() {
@@ -90,14 +90,14 @@ json() {
   m=$(mono_s); b=$(boot_s); ds=null; [ -n "$m" ] && [ "${b:-0}" -gt 0 ] && { ds=$((100 - m * 100 / b)); [ $ds -lt 0 ] && ds=0; }
   printf '{"version":"%s","lang":"%s","skin":"%s",' "$(version)" "$(ui_lang)" "$SKIN"
   printf '"ok":{"powerhint":"%s","thermal":"%s"},' "$(ph_edits)" "$(rd "$D/thermal.state")"
-  printf '"conf":{"limit":%s,"resume":%s,"hot":%s,"hotResume":%s,"usbFast":%s,"littleMax":%s,"bigMax":%s,"bright":%s,"autoBatt":%s,"saverBatt":%s,"thermalChg":%s,"drainAlert":%s,"uiLang":"%s"},' \
-    "$CHARGE_LIMIT" "$CHARGE_RESUME" "$HOT_PAUSE" "$HOT_RESUME" "$USB_FAST" "$LITTLE_MAX" "${BIG_MAX:-0}" "$BRIGHT_CHARGE" "$AUTO_BATT" "$SAVER_BATT" "$THERMAL_CHG" "$DRAIN_ALERT" "$UI_LANG"
+  printf '"conf":{"limit":%s,"resume":%s,"hot":%s,"hotResume":%s,"usbFast":%s,"littleMax":%s,"bigMax":%s,"bright":%s,"autoBatt":%s,"saverBatt":%s,"thermalChg":%s,"drainAlert":%s,"uiLang":"%s","ack":"%s"},' \
+    "$CHARGE_LIMIT" "$CHARGE_RESUME" "$HOT_PAUSE" "$HOT_RESUME" "$USB_FAST" "$LITTLE_MAX" "${BIG_MAX:-0}" "$BRIGHT_CHARGE" "$AUTO_BATT" "$SAVER_BATT" "$THERMAL_CHG" "$DRAIN_ALERT" "$UI_LANG" "$ACK"
   printf '"full":%s,"design":%s,"cycles":%s,"sleep":%s,"sims":%s,"saver":%s,"brMode":%s,' "$(jnum "$(rd $B/charge_full)")" "$(jnum "$(rd $B/charge_full_design)")" "$(jnum "$(rd $B/cycle_count)")" $ds "$(jnum "$(sims)")" "$(jnum "$(saver_get)")" "$(jnum "$(sget system screen_brightness_mode)")"
   printf '"littleFreqs":%s,"bigFreqs":%s,' "$(jarr "$(rd $CPU0/scaling_available_frequencies)")" "$(jarr "$(rd $CPU6/scaling_available_frequencies)")"
   printf '"dist":{"little":%s,"big":%s,"gpu":%s},' "$(jdist $CPU0/stats/time_in_state 1000)" "$(jdist $CPU6/stats/time_in_state 1000)" \
     "$(awk '/^[* ] *[0-9]+:/ { sub(/^[* ]+/, ""); sub(/:/, ""); print $1, $NF }' $K/devfreq/trans_stat 2>/dev/null | jdist /dev/stdin 1000000)"
   dt_cache 2>/dev/null
-  printf '"dt":{"fcc":%s,"dcp":%s,"qc2":%s},' "$(jarr "$(sed -n 's/^fcc=//p' "$D/dt.tables" 2>/dev/null)")" "$(jarr "$(sed -n 's/^dcp=//p' "$D/dt.tables" 2>/dev/null)")" "$(jarr "$(sed -n 's/^qc2=//p' "$D/dt.tables" 2>/dev/null)")"
+  printf '"dt":{'; n=0; for k in fcc qc3 qc3cp qc2 dcp pd; do [ $n = 1 ] && printf ','; n=1; printf '"%s":%s' $k "$(jarr "$(sed -n "s/^$k=//p" "$D/dt.tables" 2>/dev/null)")"; done; printf '},'
   printf '"drainAlert":%s,' "$(jarr "$(rd "$D/drain.alert")")"
   printf '"history":%s,"drain":%s,"sessions":%s,"events":%s,' "$(jhist)" "$(jlines "$DRAIN" 60)" "$(jlines "$SESS" 10)" "$(jlines "$LOG" 60)"
   jcommon; printf '}\n'
@@ -114,7 +114,7 @@ logs() {
   echo; echo "-- drain (end,seconds,−%,mAh,deep sleep %,mobile MB,mobile share %,SIMs)"; cat "$DRAIN" 2>/dev/null
   echo; echo "-- history (time,%,temp×10,status,mA,charging,screen,cable), last 60"; tail -n 60 "$HIST" 2>/dev/null
 }
-fname() { echo "$OUT/davinci-control_$(version)_$1_$(date +%Y-%m-%d_%H%M).txt"; }
+fname() { outname "$1"; }
 
 cmd=$1; shift
 case "$cmd" in
@@ -130,7 +130,8 @@ case "$cmd" in
     case "$(rd "$D/diag.status")" in [0-9]*/*)
       [ -n "$(find "$D/diag.status" -mmin -5 2>/dev/null)" ] && { echo busy; exit 0; } ;; esac
     echo "0/12" > "$D/diag.status"
-    PANEL_HOST=$1 nohup sh "$MODDIR/diag.sh" >/dev/null 2>&1 &
+    # отдельный сеанс: не умирает вместе с оболочкой панели / own session: survives the panel shell
+    PANEL_HOST=$1 setsid nohup sh "$MODDIR/diag.sh" >/dev/null 2>&1 </dev/null &
     echo started ;;
   changelog) cat "$MODDIR/changelog.tsv" ;;
   full)
@@ -176,5 +177,11 @@ case "$cmd" in
   lang) case "$1" in auto|ru|en) setc UI_LANG "$1"; UI_LANG=$1; wake_daemon ;; *) fail e_arg ;; esac ;;
   skin) case "$1" in blue|red|black) setc SKIN "$1" ;; *) fail e_arg ;; esac ;;
   resetsw) rm -f "$D/bad_switches"; ev set_resetsw ;;
-  *) echo "panel json live strings logs savelogs diag changelog full [off] limit N hot N little N big N profile perf|balance|eco chgmode care|fast thermalchg 0|1 brightcharge 0|1 autobatt 0|1 saver 0|1 usbfast 0|1 drainalert 0|1 lang auto|ru|en skin blue|red|black resetsw" ;;
+  ack)  # предупреждение прочитано (ack ID) или снова показывать (ack -ID) / warning read, or show it again
+    case "$1" in -*) id=${1#-} ;; *) id=$1 ;; esac
+    case "$id" in ''|*[!a-z]*) fail e_arg ;; esac
+    a=$(for x in $ACK; do [ "$x" != "$id" ] && echo "$x"; done | tr '\n' ' ')
+    [ "${1#-}" = "$1" ] && a="$a $id"
+    a=$(echo $a); setc ACK "\"$a\"" ;;
+  *) echo "panel json live strings logs savelogs diag changelog full [off] limit N hot N little N big N profile perf|balance|eco chgmode care|fast thermalchg 0|1 brightcharge 0|1 autobatt 0|1 saver 0|1 usbfast 0|1 drainalert 0|1 lang auto|ru|en skin blue|red|black resetsw ack [-]ID" ;;
 esac

@@ -1,6 +1,6 @@
 #!/bin/bash
 # Все проверки перед сборкой / all checks before a build
-set -e
+set -eo pipefail
 cd "$(dirname "$0")/.."
 echo "== shellcheck"; SHL=busybox; echo | shellcheck -s busybox - >/dev/null 2>&1 || SHL=dash; shellcheck -s $SHL -S warning -e SC2034,SC2154,SC1090,SC1091,SC2086,SC2155 module/*.sh && echo "shellcheck: OK"
 echo "== синтаксис / syntax"; for f in module/*.sh; do busybox ash -n "$f"; done; echo "syntax: OK"

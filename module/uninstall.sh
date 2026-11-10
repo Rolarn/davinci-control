@@ -4,7 +4,7 @@
 B=/sys/class/power_supply/battery
 for n in charging_enabled battery_charging_enabled; do [ -f $B/$n ] && echo 1 > $B/$n; done
 [ -f $B/input_suspend ] && echo 0 > $B/input_suspend
-for f in $B/system_temp_level $B/charge_control_limit; do [ -f $f ] && echo 0 > $f 2>/dev/null; done
+for c in /sys/class/thermal/cooling_device*; do [ "$(cat $c/type 2>/dev/null)" = battery ] && echo 0 > $c/cur_state 2>/dev/null; done
 for p in /sys/devices/system/cpu/cpufreq/policy0 /sys/devices/system/cpu/cpufreq/policy6; do
   [ -f $p/cpuinfo_max_freq ] && cat $p/cpuinfo_max_freq > $p/scaling_max_freq 2>/dev/null
 done

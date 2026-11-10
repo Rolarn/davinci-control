@@ -51,7 +51,7 @@ cc_set() {  # $1 = ступень / level (0 = без ограничения / n
   if [ "$cur" != "$v" ]; then
     [ "$v" = "$cc_cur" ] && [ $cc_ovr = 0 ] && { ev cc_other "$v" "$cur"; cc_ovr=1; }
     echo "$v" > "$CCL" 2>/dev/null
-    if [ "$(rd "$CCL")" != "$v" ]; then ev cc_reject "${CCL##*/}" "$v" "$(rd "$CCL")"; CC_OK=0; return; fi
+    if [ "$(rd "$CCL")" != "$v" ]; then ev cc_reject "$CCLN" "$v" "$(rd "$CCL")"; CC_OK=0; return; fi
   fi
   [ "$v" = "$cc_cur" ] && return
   [ "$cc_q" = 1 ] && { cc_cur=$v; return; }

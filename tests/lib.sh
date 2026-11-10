@@ -17,14 +17,19 @@ mkroot() {  # $1 = файл сценария (необязательно) / opti
   B=$R/sys/class/power_supply/battery; U=$R/sys/class/power_supply/usb; C=$R/sys/class/power_supply/charge_pump_master
   mkdir -p $B $U $C $R/sys/class/backlight/panel0-backlight $R/sys/kernel/fast_charge $R/sys/class/net/rmnet_data0/statistics $R/sys/class/net/wlan0/statistics \
     $R/sys/devices/system/cpu/cpufreq/policy0/stats $R/sys/devices/system/cpu/cpufreq/policy6/stats $R/sys/class/kgsl/kgsl-3d0/devfreq \
-    $R/sys/class/thermal/thermal_zone0 $R/sys/class/thermal/thermal_zone1 $R/sys/class/thermal/thermal_zone2 $R/sys/module/qpnp_smb5/parameters $R/sys/module/smb5_lib/parameters \
+    $R/sys/class/thermal/thermal_zone0 $R/sys/class/thermal/thermal_zone1 $R/sys/class/thermal/thermal_zone2 $R/sys/class/thermal/cooling_device0 $R/sys/class/thermal/cooling_device5 $R/sys/module/qpnp_smb5/parameters $R/sys/module/smb5_lib/parameters \
     "$R/proc/device-tree/soc/qcom,qpnp-smb5"
   w() { echo "$2" > "$1"; }
   w $B/capacity 40; w $B/status Charging; w $B/temp 300; w $B/current_now -2600000; w $B/voltage_now 4100000; w $B/charge_counter 2000000
-  w $B/system_temp_level 0; w $B/num_system_temp_levels 16; w $B/input_suspend 0; w $B/battery_charging_enabled 1
+  # как на davinci: charge_control_limit только для чтения, рабочий рычаг — охлаждающее устройство «battery»
+  # like davinci: charge_control_limit is read-only, the working lever is the "battery" cooling device
+  w $B/charge_control_limit 0; w $B/charge_control_limit_max 16
+  w $R/sys/class/thermal/cooling_device0/type thermal-cpufreq-0; w $R/sys/class/thermal/cooling_device0/cur_state 0
+  w $R/sys/class/thermal/cooling_device5/type battery; w $R/sys/class/thermal/cooling_device5/cur_state 0; w $R/sys/class/thermal/cooling_device5/max_state 16
+  w $B/input_suspend 0; w $B/battery_charging_enabled 1
   w $B/charge_full 3700000; w $B/charge_full_design 4000000; w $B/cycle_count 310; w $B/charger_temp 420; w $B/charger_temp_max 450
   printf 'POWER_SUPPLY_STATUS=Charging\nPOWER_SUPPLY_HEALTH=Good\nPOWER_SUPPLY_CHARGE_TYPE=Fast\nPOWER_SUPPLY_DIE_HEALTH=Cool\nPOWER_SUPPLY_INPUT_CURRENT_LIMITED=0\n' > $B/uevent
-  w $C/temp 380; printf 'POWER_SUPPLY_NAME=charge_pump_master\nPOWER_SUPPLY_TEMP=380\n' > $C/uevent
+  w $C/cp_enable 1; w $C/cp_die_temp 380; printf 'POWER_SUPPLY_NAME=charge_pump_master\nPOWER_SUPPLY_TEMP=380\n' > $C/uevent
   w $U/present 1; w $U/online 1; w $U/connector_temp 350
   printf 'POWER_SUPPLY_REAL_TYPE=USB_HVDCP_3\nPOWER_SUPPLY_ONLINE=1\nPOWER_SUPPLY_VOLTAGE_NOW=8800000\nPOWER_SUPPLY_INPUT_CURRENT_NOW=2000000\nPOWER_SUPPLY_QUICK_CHARGE_TYPE=1\n' > $U/uevent
   w $R/sys/class/backlight/panel0-backlight/brightness 1000; w $R/sys/class/backlight/panel0-backlight/max_brightness 2047
@@ -39,7 +44,9 @@ mkroot() {  # $1 = файл сценария (необязательно) / opti
   w $R/sys/class/thermal/thermal_zone2/type conn_therm; w $R/sys/class/thermal/thermal_zone2/temp 36000
   w $R/proc/uptime "5000.00 1000.00"; echo "now at 3000000000000 nsecs" > $R/proc/timer_list; echo "0.1 0.2 0.3 1/100 1" > $R/proc/loadavg
   # таблица тока QC3 из device tree: 17 значений, big-endian / QC3 current table, big-endian u32
-  python3 -c "import struct,sys; sys.stdout.buffer.write(struct.pack('>17I',*[3500000,3400000,3300000,3200000,3100000,3000000,2900000,2800000,2700000,2600000,2400000,2200000,2000000,1500000,1000000,0,0]))" > "$R/proc/device-tree/soc/qcom,qpnp-smb5/qcom,thermal-mitigation"
+  dtw() { python3 -c "import struct,sys; v=[int(x) for x in sys.argv[1:]]; sys.stdout.buffer.write(struct.pack('>%dI'%len(v),*v))" $2 > "$R/proc/device-tree/soc/qcom,qpnp-smb5/$1"; }
+  dtw qcom,thermal-mitigation "3500000 3400000 3300000 3200000 3100000 3000000 2900000 2800000 2600000 2400000 2200000 2000000 1800000 1500000 1000000 500000"
+  dtw qcom,thermal-fcc-qc3-normal "3500000 3400000 3300000 3200000 3100000 3000000 2900000 2800000 2700000 2600000 2400000 2200000 2000000 1500000 1000000 500000"
   printf 'com.a 10100 0 /data\n' > $R/data/system/packages.list
   printf '"1017600"\n"1017600"\n"PowerHint": "EXPENSIVE_RENDERING",\n"Node": "GPUMinFreq",\n"Duration": 0,\n"Value": "7"\n' > $R/vendor/etc/powerhint.json
   w $R/now 1700000000; w $R/lowpower 0; w $R/brmode 1

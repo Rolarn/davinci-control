@@ -9,7 +9,7 @@ head_sleep='#!/bin/bash
 R=@R@; B=$R/sys/class/power_supply/battery; U=$R/sys/class/power_supply/usb; BL=$R/sys/class/backlight/panel0-backlight/brightness
 n=$(cat $R/step 2>/dev/null || echo 0); n=$((n+1)); echo $n > $R/step
 echo $(( $(cat $R/now) + ${1:-60} )) > $R/now
-echo "step $n t=$(cat $B/temp) lvl=$(cat $B/system_temp_level) en=$(cat $B/battery_charging_enabled) $(cat $R/data/adb/davinci-control/state 2>/dev/null)" >> $R/trace
+echo "step $n t=$(cat $B/temp) lvl=$(cat $R/sys/class/thermal/cooling_device5/cur_state) en=$(cat $B/battery_charging_enabled) $(cat $R/data/adb/davinci-control/state 2>/dev/null)" >> $R/trace
 unplug() { echo 0 > $U/present; echo 0 > $U/online; echo Discharging > $B/status; }
 plug() { echo 1 > $U/present; echo 1 > $U/online; echo Charging > $B/status; }
 # как ядро: переключатель выключен — батарея не заряжается / like the kernel: switch off → not charging
@@ -30,7 +30,7 @@ check "ступень 8 при 43,5° / level 8 at 43.5°" "grep -q 't=435 lvl=8
 check "пауза при 45,5° (порог 42) / pause at 45.5° (threshold 42)" "grep -q 'pause_hot' $R/$D_/events.log"
 check "пауза держится минимум 2 мин / pause lasts ≥ 2 min" "[ \$(grep -c 'chg=off why=hot' $R/trace) -ge 4 ]"
 check "продолжение при 37,5° / resume at 37.5°" "grep -q 'resume' $R/$D_/events.log"
-check "при выключении ток без ограничения / level 0 on disable" "[ \$(cat $B/system_temp_level) = 0 ] && [ \$(cat $B/battery_charging_enabled) = 1 ]"
+check "при выключении ток без ограничения / level 0 on disable" "[ \$(cat $R/sys/class/thermal/cooling_device5/cur_state) = 0 ] && [ \$(cat $B/battery_charging_enabled) = 1 ]"
 check "событие «выключен» / disabled event" "grep -q 'disabled' $R/$D_/events.log"
 check "статус в module.prop / status in module.prop" "grep -q '^description=✅' $M/module.prop"
 
