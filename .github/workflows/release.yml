@@ -1,9 +1,11 @@
 # Релиз по тегу vX.Y.Z: проверки, zip, страница релиза (сначала RU, потом EN), update.json в main.
+# Теги vX.Y.Z-rc.N — тестовые сборки, релиз по ним не создаётся (их собирает ci.yml).
 # Release on a vX.Y.Z tag: checks, zip, release page (RU first, then EN), update.json on main.
+# vX.Y.Z-rc.N tags are test builds: no release for them (ci.yml builds them).
 name: release
 on:
   push:
-    tags: ['v*']
+    tags: ['v*', '!v*-*']
 permissions:
   contents: write
 jobs:

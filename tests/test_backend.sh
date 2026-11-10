@@ -33,6 +33,8 @@ check "имя файла по шаблону / file name pattern ($P)" "echo '$P
 check "шапка: версия, устройство, ядро, root, панель / header" "head -n 6 $R$P | grep -q '^Davinci Control v1.0.0' && grep -q '^root: Magisk 31.1 (31100)' $R$P && grep -q '^panel: WebUI X' $R$P"
 check "журнал на английском / log in English" "grep -q 'Service started' $R$P"
 
+sed -i 's/^version=.*/version=v1.0.0-rc.3 (abc1234)/' $M/module.prop; P=$(tune savelogs x); sed -i 's/^version=.*/version=v1.0.0/' $M/module.prop
+check "тестовая сборка: имя без кода коммита / rc build: name without commit ($P)" "echo '$P' | grep -qE '/davinci-control_v1.0.0-rc.3_log_[0-9_-]+.txt$' && head -n 1 $R$P | grep -q 'v1.0.0-rc.3 (abc1234)'"
 echo "4. Диагностика и маскировка / diagnostics and masking"
 echo 'sync wakelock *sync*/com.google/user.name@gmail.com 192.168.1.20 aa:bb:cc:dd:ee:ff +79991234567' > $R/sys/class/backlight/panel0-backlight/leak
 cat > $R/bin/dumpsys <<EOF

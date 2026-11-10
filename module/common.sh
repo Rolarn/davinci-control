@@ -54,13 +54,15 @@ EOF
 
 rd() { cat "$1" 2>/dev/null; }
 version() { sed -n 's/^version=//p' "$MODDIR/module.prop" 2>/dev/null; }
+# версия без кода коммита — для имён файлов / version without the commit — for file names
+vname() { version | cut -d' ' -f1; }
 vcode() { sed -n 's/^versionCode=//p' "$MODDIR/module.prop" 2>/dev/null; }
 trim() { [ -f "$1" ] && [ "$(wc -l < "$1")" -gt "$2" ] && tail -n "$2" "$1" > "$1.t" && mv "$1.t" "$1"; }
 
 # Имя файла для «Загрузок»; если такое уже есть (две записи за минуту) — суффикс _2, _3…
 # File name for Download; if it exists (two saves within a minute) — a _2, _3… suffix
 outname() {
-  f=$OUT/davinci-control_$(version)_$1_$(date +%Y-%m-%d_%H%M); n=1; x=$f.txt
+  f=$OUT/davinci-control_$(vname)_$1_$(date +%Y-%m-%d_%H%M); n=1; x=$f.txt
   while [ -e "$x" ]; do n=$((n + 1)); x=${f}_$n.txt; done; echo "$x"
 }
 # ---------- язык / language ----------
