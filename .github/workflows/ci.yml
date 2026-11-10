@@ -3,6 +3,7 @@
 name: ci
 on:
   push:
+    branches: ['**']
   pull_request:
   workflow_dispatch:
 permissions:
@@ -27,3 +28,20 @@ jobs:
           name: davinci-control-${{ github.ref_type == 'tag' && github.ref_name || github.sha }}
           path: dist/*
           retention-days: 14
+  # Метка тестовой сборки vX.Y.Z-rc.N на коммите, где поднят номер (файл RC) — чтобы по тегу найти код
+  # Tag the test build vX.Y.Z-rc.N on the commit that bumped the number (RC file) — to find its code later
+  tag-rc:
+    needs: test
+    if: github.event_name == 'push' && github.ref != 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - run: |
+          [ -f RC ] || exit 0
+          t=$(sed -n 's/^version=//p' module/module.prop)-rc.$(cat RC)
+          git ls-remote --exit-code --tags origin "refs/tags/$t" >/dev/null && { echo "$t уже есть / exists"; exit 0; }
+          c=$(git log -n 1 --format=%H -- RC)
+          git tag "$t" "$c" && git push origin "$t"

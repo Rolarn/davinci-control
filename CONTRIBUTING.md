@@ -8,7 +8,7 @@
 - **Идеи** — через [шаблон идеи](https://github.com/Rolarn/davinci-control/issues/new?template=idea.yml). Метки: `idea` — предложено, `planned` — в планах, `done` — сделано, `won't` — не будет.
 - **Код.** Скрипты — POSIX sh для BusyBox ash, панель — HTML, CSS и JavaScript без библиотек.
 - **Тексты — на двух языках.** Каждая строка панели есть в русском и английском (`module/webroot/i18n.js`), каждое сообщение журнала — в `module/strings.tsv`. Тест проверяет, что ничего не пропущено.
-- **Версии** — SemVer; `versionCode = MAJOR×10000 + MINOR×100 + PATCH`. Тестовые сборки — теги `vX.Y.Z-rc.N` (`scripts/rc.sh`): версия в модуле получает номер и код коммита, например `v1.0.0-rc.3 (822f05b)`; релиз по ним не создаётся. Релиз — тег `vX.Y.Z`.
+- **Версии** — SemVer; `versionCode = MAJOR×10000 + MINOR×100 + PATCH`. Работа идёт в ветках. Тестовые сборки — `scripts/rc.sh`: номер в файле `RC` растёт, версия в модуле получает номер и код коммита, например `v1.0.0-rc.3 (822f05b)`, автосборка ставит тег `vX.Y.Z-rc.N`. Релиз создаётся сам, когда в `main` попадает версия, которой ещё нет в релизах, — поэтому в `main` сливаем только то, что выпускаем.
 - **Проверки:** `bash tests/run_all.sh` (нужны busybox, shellcheck, Node.js и Playwright). Сборка — `scripts/build.sh`.
 - **Никаких личных данных** в коммитах: логи, диагностика, номера, списки приложений.
 - **Модель** пишем как «Mi 9T / Redmi K20 (davinci)».
@@ -21,7 +21,7 @@ Thanks for wanting to help! A few rules to keep things tidy.
 - **Ideas** — via the [idea template](https://github.com/Rolarn/davinci-control/issues/new?template=idea.yml). Labels: `idea` — proposed, `planned` — planned, `done` — done, `won't` — will not happen.
 - **Code.** Scripts are POSIX sh for BusyBox ash, the panel is HTML, CSS and JavaScript without libraries.
 - **Texts in two languages.** Every panel string exists in Russian and English (`module/webroot/i18n.js`), every log message in `module/strings.tsv`. A test checks nothing is missing.
-- **Versions** — SemVer; `versionCode = MAJOR×10000 + MINOR×100 + PATCH`. Test builds are `vX.Y.Z-rc.N` tags (`scripts/rc.sh`): the module version gets the number and the commit, e.g. `v1.0.0-rc.3 (822f05b)`; no release is made for them. A release is a `vX.Y.Z` tag.
+- **Versions** — SemVer; `versionCode = MAJOR×10000 + MINOR×100 + PATCH`. Work happens in branches. Test builds — `scripts/rc.sh`: the number in the `RC` file goes up, the module version gets the number and the commit, e.g. `v1.0.0-rc.3 (822f05b)`, and CI tags `vX.Y.Z-rc.N`. A release is created by itself when `main` gets a version that has no release yet — so only what we release is merged into `main`.
 - **Checks:** `bash tests/run_all.sh` (needs busybox, shellcheck, Node.js and Playwright). Build — `scripts/build.sh`.
 - **No personal data** in commits: logs, diagnostics, numbers, app lists.
 - **The model** is written as “Mi 9T / Redmi K20 (davinci)”.
