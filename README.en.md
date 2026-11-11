@@ -15,14 +15,14 @@ Charging, performance and brightness under control for **Xiaomi Mi 9T / Redmi K2
 
 [Русский](README.md) · **English**
 
-[Download](https://github.com/Rolarn/davinci-control/releases/latest) · [Installation](#installation) · [Compatibility](#compatibility) · [FAQ](docs/FAQ.en.md)
+[Download](https://github.com/Rolarn/davinci-control/releases/latest) · [Installation](#installation) · [Compatibility](#compatibility) · [FAQ](docs/FAQ.en.md) · [The same for your phone](#want-the-same-module-for-your-phone)
 
 </div>
 
 <p align="center">
   <img src="docs/screenshots/panel-1.en.png" width="240" alt="Panel: charge, status and the mascot">
   <img src="docs/screenshots/panel-2.en.png" width="240" alt="Panel: charging, mode and limit">
-  <img src="docs/screenshots/panel-3.en.png" width="240" alt="Panel: drain in sleep by night and by week">
+  <img src="docs/screenshots/panel-3.en.png" width="240" alt="Panel: drain by hour and charge charts">
 </p>
 
 ## Is it for you
@@ -42,6 +42,7 @@ Charging, performance and brightness under control for **Xiaomi Mi 9T / Redmi K2
 ### ⚡ Charging
 The module watches temperature and current so the battery charges fast where it can and gently where it should.
 - **Charge limit** — for example up to 80%, then the phone runs on the cable. A one-time charge to 100% with one button.
+- **Charge by time:** holds the limit overnight and tops up to 100% by the time you get up.
 - **Care and Fast modes.** In Fast the module keeps the sensor just below 45 °C — above it the kernel sharply cuts current to 1.95 A.
 - **Heat pause** with automatic resume.
 - **“What limits the current”** in plain words: the charger, heat, the battery itself, the charging chips.
@@ -68,9 +69,11 @@ Rules trigger by themselves when the cable is connected or unplugged.
 ### 📊 Statistics and diagnostics
 Everything people usually install a separate battery app for.
 - **Overnight drain** in % and mA, deep sleep and causes: mobile data share, number of active SIMs.
+- **Hourly drain chart** next to the usual level for the week — you see at once when the phone uses more than usual.
 - **Weekly trend** and a warning if drain went up.
-- **Battery wear**, event log, app installs and removals.
-- **One-tap diagnostics** — a ready file for a bug report; e-mail, IP and MAC addresses are masked in it.
+- **Battery wear** and an event log; app installs and removals if you want them.
+- **Notifications** (optional): charging pauses, charge-by-time, drain going up.
+- **One-tap diagnostics** — a ready file for a bug report, about a minute; e-mail, IP and MAC addresses are masked in it. The file stays on the phone.
 </td></tr>
 <tr><td align="center"><img src="assets/mascot/export/feature-shield.svg" width="92" alt="Mascot holding a shield"></td><td>
 
@@ -109,6 +112,72 @@ In short: the module is a set of shell scripts. A background service looks at th
 **About thermal configs.** The ROM itself cuts charging current when the body warms up (from about 34 °C), using tables in the stock thermal configs. The module can install its own configs without this rule, but only if the stock ones match the tested ones byte for byte — so another ROM cannot be broken. If the files differ, the module leaves them alone and the panel says “left as is”. Battery protection in the kernel always works.
 
 Details are in [How it works](docs/how-it-works.en.md).
+
+## Want the same module for your phone?
+
+<table>
+<tr><td width="110" align="center"><img src="assets/mascot/export/faq.svg" width="92" alt="Curious mascot"></td><td>
+
+Davinci Control is made for one phone, but everything in it is yours to take: the code is open under GPL-3.0 — charging control, the background service, the panel and the test bench.
+
+The easiest way is to give this repository to an AI that is good at coding (Claude, ChatGPT, Gemini, Grok or another one) and ask it to port the module to your device. Below is a ready instruction for it: these are the rules the module itself was built by. Paste it as the first message and fill in your phone, ROM and kernel.
+
+</td></tr>
+</table>
+
+<details>
+<summary><b>📋 Instruction for the AI</b> — expand it and use the copy button in the corner of the block</summary>
+
+```text
+You are an engineer porting the Davinci Control Magisk module
+(https://github.com/Rolarn/davinci-control, GPL-3.0 licence) to another device.
+The module was written for the Xiaomi Mi 9T / Redmi K20 (davinci). I want the same for my phone.
+
+My device: <model and codename>
+ROM: <name and Android version>
+Kernel: <output of uname -r>
+Root: <Magisk, KernelSU or APatch and its version>
+
+How to work
+
+1. First study the whole repository: README, docs/how-it-works.en.md, module/*.sh,
+   module/webroot, tests. Understand what each part does and which kernel nodes
+   it relies on.
+2. Assume nothing about my phone. Everything tied to davinci (paths in /sys, the
+   qpnp-smb5 charging driver, current tables from the device tree, CPU frequencies,
+   powerhint.json, thermal configs) must be checked on my device: give me read-only
+   commands and I will send the output.
+3. Order of work: analysis → proposal → my confirmation → code. Do not build or
+   change anything until I have agreed to the plan.
+4. Do not say "it works" until it has been verified on the device. Read back every
+   write to the kernel and check the real effect (current, charging status), not
+   the exit code. If you were wrong, say so plainly and fix it.
+5. Safety: never disable the hardware battery protection in the kernel. Replace
+   system files only if they match the tested ones byte for byte. If the service
+   crashes, charging stays on and the limits are lifted. Removing the module puts
+   everything back as it was.
+6. Privacy: the module never goes online. Logs, diagnostics, serial numbers, app
+   lists and any of my data stay out of the repository and out of commit messages.
+   Personal data is masked in the diagnostics file.
+7. Code: POSIX sh for BusyBox ash; the panel is HTML, CSS and JavaScript with no
+   libraries (WebUI, the KernelSU standard). Simple solutions, no extra
+   dependencies. Comments explain why, not what.
+8. Cover every change with a test on the bench in tests/ (fake /sys and /proc).
+   Run all checks before a build.
+9. Panel and log texts are in plain language, without jargon, with a hint next to
+   every setting. If there are several languages, the translations are complete.
+10. Versions follow SemVer. Number test builds separately (rc.1, rc.2…): two
+    different files never share a name.
+11. The licence is GPL-3.0: a derived module stays open and credits the original
+    project. Give the module its own name and its own id.
+12. Talk to me simply and to the point. If something is unclear or risky, stop
+    and ask.
+
+Start like this: list which parts of the module carry over as they are, which ones
+must be checked on my device, and which commands I should run for the first diagnostics.
+```
+
+</details>
 
 ## Help
 

@@ -10,7 +10,9 @@ check "json валиден / json is valid" "echo '$J' | python3 -c 'import json
 check "live валиден / live is valid" "echo '$L' | python3 -m json.tool >/dev/null"
 check "строки: оба языка / strings: both languages" "echo '$S' | python3 -c 'import json,sys; d=json.load(sys.stdin); assert all(len(v)==2 and v[0] and v[1] for v in d.values()) and len(d)>70'"
 check "температуры микросхем / chip temperatures" "echo '$J' | python3 -c 'import json,sys; c=json.load(sys.stdin)[\"chips\"]; assert c==dict(pmic=420,cp=380,conn=350), c'"
-check "таблица тока из device tree / DT current table" "echo '$J' | python3 -c 'import json,sys; t=json.load(sys.stdin)[\"dt\"]; assert t[\"qc3\"][8]==2700000 and t[\"qc3\"][12]==2000000 and t[\"fcc\"][8]==2600000, t'"
+check "таблица тока из device tree / DT current table" "echo '$J' | python3 -c 'import json,sys; t=json.load(sys.stdin)[\"dt\"]; assert t[\"qc3\"][8]==2700000 and t[\"qc3\"][12]==2000000 and t[\"fcc\"][8]==2600000 and t[\"qc3cp\"][10]==2600000, t'"
+check "действующая таблица и обычный расход / table in effect and typical drain" "echo '$J' | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d[\"cc\"][\"tbl\"]==\"qc3\" and set(d[\"typ\"])=={\"on\",\"off\"} and len(d[\"events\"])<=10, d[\"cc\"]'"
+check "все события — отдельной командой / all events via a separate command" "tune events | python3 -c 'import json,sys; assert len(json.load(sys.stdin))>=3'"
 check "SIM: 2 / SIMs: 2" "echo '$J' | python3 -c 'import json,sys; assert json.load(sys.stdin)[\"sims\"]==2'"
 
 check "рычаг тока — охлаждающее устройство / level lever is the cooling device" "echo '$J' | python3 -c 'import json,sys; assert json.load(sys.stdin)[\"cc\"][\"node\"]==\"cooling_device5(battery)\"'"
@@ -25,6 +27,11 @@ check "ошибка на неверном значении / error on bad value"
 check "текст ошибки на английском / error text in English" "tune limit 20 | grep -q 'A number from 50 to 100'"
 tune ack noprot >/dev/null; tune ack drain >/dev/null; tune ack -noprot >/dev/null
 check "«Понятно» сохраняется и снимается / ack is stored and cleared" "grep -q '^ACK=\"drain\"' $C"
+tune fullby 06:30 >/dev/null; tune applog 1 >/dev/null; tune notify 1 >/dev/null
+check "зарядка к времени, журнал приложений, уведомления / charge-by-time, app log, notifications" "grep -q '^FULL_BY=06:30' $C && grep -q '^APP_LOG=1' $C && grep -q '^NOTIFY=1' $C && ! tune fullby 25:00 >/dev/null"
+check "пробное уведомление отправлено / test notification posted" "grep -q 'cmd notification post .*dc_test' $R/calls.log"
+tune fullby off >/dev/null
+check "зарядка к времени выключается / charge-by-time turns off" "grep -q '^FULL_BY=\$' $C"
 check "события настроек / setting events" "grep -q 'set_mode_fast' $R/$D_/events.log && grep -q 'set_profile_eco' $R/$D_/events.log"
 
 echo "3. Сохранение журнала / saving the log"
@@ -46,7 +53,15 @@ chmod +x $R/bin/dumpsys
 F=$(ls $R/sdcard/Download/davinci-control/*_diag_*.txt 2>/dev/null | head -n 1)
 check "файл диагностики создан / diagnostics file created" "[ -s '$F' ] && grep -q '^done:' $R/$D_/diag.status"
 check "почта, IP, MAC, номер скрыты / e-mail, IP, MAC, number masked" "! grep -qE 'gmail|192\\.168|aa:bb:cc|79991234567' '$F' && grep -q '<email>' '$F'"
-check "SMB1390 и таблицы в диагностике / SMB1390 and tables" "grep -q 'charge_pump_master' '$F' && grep -q '^fcc=3500000' '$F'"
+check "SMB1390 и таблицы в диагностике / SMB1390 and tables" "grep -q 'charge_pump_master' '$F' && grep -q '^fcc=3500000' '$F' && grep -q '^qc3cp=3500000' '$F'"
+check "время шагов и общее / step and total timings" "[ \$(grep -c '^(step [0-9]* took' '$F') = 12 ] && grep -q 'total [0-9]* s' '$F'"
+# зависшая системная команда не задерживает отчёт / a stuck system command does not hold the report
+printf '#!/bin/sh\nexec /bin/sleep 300\n' > $R/bin/dumpsys
+T0=$(date +%s)
+(cd "$R" && PATH=$R/bin R=$R MODDIR=$M BB=$BBX DIAG_LIM=1 timeout 60 $BBX ash $M/diag.sh) >/dev/null 2>&1 || true
+T1=$(( $(date +%s) - T0 ))
+check "зависшие команды обрываются, отчёт готов за $T1 с / stuck commands are cut off" "[ $T1 -lt 20 ] && [ \$(ls $R/sdcard/Download/davinci-control/*_diag_*.txt | wc -l) = 2 ] && grep -q '^done:' $R/$D_/diag.status"
+check "блокирующий wakeup_count не читается / the blocking wakeup_count is never read" "! grep -q 'wakeup_count[^ ]* *[;|]' $M/diag.sh && ! grep -qE '^[^#]*(cat|kv|rd)[^#]*wakeup_count' $M/diag.sh"
 
 echo "5. Установщик / installer"
 newI() { I=$(mktemp -d "${TMPDIR:-/tmp}/dc.XXXXXX"); CLEAN="$CLEAN $I"; mkdir -p "$I/m"; cp -a "$ROOT/module/." "$I/m/"; }

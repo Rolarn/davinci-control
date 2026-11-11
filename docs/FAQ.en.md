@@ -128,14 +128,28 @@ Parameters in some kernels. When on, the kernel rejects or ignores current limit
 <details>
 <summary><b>How do I report a bug?</b></summary>
 
-In the panel: Log and diagnostics → Diagnostics (about 2 minutes) or Save the log. The file appears in Download/davinci-control. E-mail, IP and MAC addresses and long numbers are masked, but look through the file before posting. Then open an issue on GitHub and attach the file.
+In the panel: Log and diagnostics → Collect diagnostics (about a minute) or Save the log only. The file appears in Download/davinci-control and is not sent anywhere. E-mail, IP and MAC addresses and long numbers are replaced with placeholders, but look through the file before posting. Then open an issue on GitHub and attach the file.
 
 </details>
 
 <details>
 <summary><b>What data does the module collect?</b></summary>
 
-None to send: the module does not go online. It keeps the log, charge history and measurements on your phone in /data/adb/davinci-control and deletes them with the module.
+None to send: the module does not go online. It keeps the log, charge history and measurements on your phone in /data/adb/davinci-control and deletes them with the module. Logging app installs and removals is off until you turn it on yourself.
+
+</details>
+
+<details>
+<summary><b>How do I get 100% by morning without sitting at 100% all night?</b></summary>
+
+Turn on “Charge to 100% by a set time” in the Charging card and pick the hour. Overnight the phone holds the limit and tops up to 100% in advance. The time repeats every day.
+
+</details>
+
+<details>
+<summary><b>Notifications do not arrive</b></summary>
+
+They are off by default: turn on Notifications in the Panel card — a test one arrives at once. Notifications come from the system app Shell; if the test one does not show, allow notifications for it in Android settings.
 
 </details>
 

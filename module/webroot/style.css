@@ -97,6 +97,11 @@ input[type=range] { width: 100%; accent-color: var(--accent); height: 34px; marg
 .btn { width: 100%; border: 0; border-radius: 12px; padding: 12px; font-weight: 600; background: var(--accent-weak); color: var(--accent); min-height: 46px; transition: background .25s, color .25s, opacity .25s }
 .btn.on { background: var(--accent); color: #fff } .btn.sec { background: var(--sub); color: var(--text) } .btn:disabled { opacity: .6 }
 .btns { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 12px }
+.btns.one { grid-template-columns: 1fr }
+.fbrow { display: flex; align-items: center; gap: 10px; flex-wrap: wrap }
+.fbrow .hint { margin: 0; flex: 1; min-width: 150px }
+input[type=time] { font: 600 16px system-ui; font-variant-numeric: tabular-nums; color: var(--text); background: var(--sub); border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; min-height: 40px; color-scheme: light dark; transition: border-color .25s }
+input[type=time]:focus { outline: 0; border-color: var(--accent) }
 .btnrow { display: flex; gap: 10px; align-items: center }
 .switch { display: flex; align-items: center; justify-content: space-between; gap: 10px }
 .switch > div { min-width: 0; flex: 1; overflow-wrap: anywhere } .switch b { display: block; font-weight: 600 } .switch .hint { margin-top: 2px }
@@ -123,6 +128,8 @@ details.more > div { padding-top: 6px; animation: fadein .3s var(--ease) }
 .axis { display: flex; justify-content: space-between; color: var(--muted); font-size: 11px; margin-top: 3px }
 .legend { color: var(--muted); font-size: 12px; display: flex; gap: 12px; flex-wrap: wrap; margin-top: 8px }
 .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 4px; vertical-align: -1px }
+.legend .lgl { width: 16px; height: 2px; border-radius: 0; background: var(--c1); vertical-align: 3px }
+.legend .lgd { width: 16px; height: 0; border-radius: 0; border-top: 2px dashed var(--c2); vertical-align: 3px } .legend .lgd.off { border-color: var(--ok) }
 .lgp { background: var(--pause) } .lgt { background: var(--c2); height: 2px !important; vertical-align: 3px !important }
 .dl { display: grid; grid-template-columns: 70px 1fr 40px; align-items: center; gap: 8px; font-size: 13px; padding: 2px 0; font-variant-numeric: tabular-nums }
 .dl .b { height: 8px; background: var(--sub); border-radius: 99px; overflow: hidden } .dl .b i { display: block; height: 100%; background: var(--bar) }

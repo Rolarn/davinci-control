@@ -20,11 +20,18 @@ D=$R/data/adb/davinci-control; echo "CC_SMART=0" > $D/config; echo "HOT_PAUSE=48
 n0=1700000000
 for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14; do echo "$((n0 - i * 86400)),27000,$((3 + i % 3)),$((140 + i * 4)),9$((i % 9)),$((i * 3)),$((20 + i * 3)),2" ; done | sort -n > $D/drain.csv
 for i in 3 2 1; do echo "$((n0 - i * 86400 - 7200)),$((n0 - i * 86400)),$((30 + i)),80,2350,44$i,USB_HVDCP_3,17,fast,$((i * 20)),0" >> $D/sessions.csv; done
-for i in $(seq 288 -1 1); do s=$((n0 - i * 300)); c=$(( 80 - (288 - i) / 6 )); [ $c -lt 30 ] && c=30; echo "$s,$c,$((290 + i % 40)),Discharging,-300,on,$([ $((i % 3)) = 0 ] && echo on || echo off),0" >> $D/history.csv; done
+# сутки истории: днём экран (420–620 мА), ночью сон одним длинным шагом (по точному счётчику ≈ 40 мА), 7 дней для «обычного» уровня
+# a day of history: screen by day (420–620 mA), the night as one long sleep step (≈ 40 mA from the precise gauge), 7 days for the usual level
+awk -v n0=$n0 'BEGIN { raw = 9000; t = n0 - 7 * 86400
+  while (t < n0) { hod = int((t % 86400) / 3600)
+    if (hod < 6) { dt = 6 * 3600 - t % 86400; if (t + dt > n0) dt = n0 - t; ma = 40; scr = "off" } else { dt = 300; scr = (int(t / 900) % 5 ? "off" : "on"); ma = (scr == "on" ? 420 + (int(t / 300) % 5) * 50 : 70) }
+    printf "%d,%d,%d,Discharging,%d,on,%s,0,%d\n", t, raw / 100, 280 + hod, ma, scr, raw
+    raw -= ma * dt / 3600 / 3700 * 10000; if (raw < 1500) raw = 9000; t += dt } }' >> $D/history.csv
 run_daemon
 echo 0 > $R/step; rm -f $M/disable
 sed -i "s/^cc=0 /cc=10 /; s/ reg=0 / reg=1 /; s/ pl=0 / pl=1 /" $D/state 2>/dev/null
 echo 10 > $R/sys/class/thermal/cooling_device5/cur_state; echo 441 > $R/sys/class/power_supply/battery/temp
 echo module > $D/thermal.state
-tune json > "$ROOT/tests/out/json.json"; tune strings > "$ROOT/tests/out/strings.json"
+echo "FULL_BY=07:00" >> $D/config
+tune json > "$ROOT/tests/out/json.json"; tune strings > "$ROOT/tests/out/strings.json"; tune events > "$ROOT/tests/out/events.json"
 python3 -m json.tool "$ROOT/tests/out/json.json" >/dev/null && echo "panel data: OK"

@@ -2,7 +2,7 @@
 # Davinci Control — бэкенд панели: JSON, текстовый отчёт, журнал, сохранение логов и команды настроек.
 # Davinci Control panel backend: JSON, text report, log, saving logs and setting commands.
 MODDIR=${MODDIR:-$R/data/adb/modules/davinci-control}
-[ "$(id -u)" = 0 ] || [ -n "$R" ] || exec su -c "sh $MODDIR/tune.sh $*"
+[ "$(id -u)" = 0 ] || [ -n "$R" ] || { echo "root required"; exit 1; }
 # WebUI запускает обычный sh — переходим в BusyBox, как загрузочные скрипты. / run under BusyBox like boot scripts.
 if [ -z "$ASH_STANDALONE" ] && [ -z "$R" ]; then
   for b in /data/adb/magisk/busybox /data/adb/ksu/bin/busybox /data/adb/ap/bin/busybox; do
@@ -19,7 +19,7 @@ setc() {  # KEY VALUE
 num() { case "$1" in ''|*[!0-9]*) return 1 ;; esac; }
 bit() { case "$1" in 0|1) return 0 ;; esac; return 1; }
 mhz() { echo $(( ${1:-0} / 1000 )); }
-STATE=$(rd "$D/state")
+rdv STATE "$D/state"
 stv() { v=${STATE#*"$1"=}; [ "$v" = "$STATE" ] && return; echo "${v%% *}"; }
 fail() { t "$@"; exit 1; }
 
@@ -36,8 +36,9 @@ report() {
   echo "-- $(t r_charge)"
   echo "switch: $(stv sw) · bad: $(stv bad | tr ',' ' ')"
   echo "limit: $CHARGE_LIMIT% ($CHARGE_RESUME%) · hot: $HOT_PAUSE° ($HOT_RESUME°) · mode: $([ "$CC_SMART" = 1 ] && echo care || echo fast)"
-  echo "state: chg=$(stv chg) why=$(stv why) plugged=$(stv pl) full=$([ -f "$D/full" ] && echo 1 || echo 0)"
-  echo "level: $CCLN=$(rd "$CCL")/$(rd "$CCLMAX") own=$(stv cc) ok=$(stv ccok) hold=$(stv reg)"
+  echo "state: chg=$(stv chg) why=$(stv why) plugged=$(stv pl) full=$([ -f "$D/full" ] && echo 1 || echo 0) full-by=${FULL_BY:--} (active=$(stv fb))"
+  cc_plan "$(stv tbl)"
+  echo "level: $CCLN=$(rd "$CCL")/$(rd "$CCLMAX") own=$(stv cc) ok=$(stv ccok) hold=$(stv reg) table=$(stv tbl) steps=$L1/$L2/$L3"
   echo "kernel: health=$(sed -n 's/^POWER_SUPPLY_HEALTH=//p' $B/uevent 2>/dev/null) die=$(sed -n 's/^POWER_SUPPLY_DIE_HEALTH=//p' $B/uevent 2>/dev/null)"
   echo "temp °C×10: battery=$(rd $B/temp) pm6150=$(t_pmic) smb1390=$(t_cp) connector=$(t_conn)"
   echo
@@ -79,19 +80,35 @@ jcommon() {
   printf '"usb":%s,"bat":%s,' "$(juev $U/uevent REAL_TYPE ONLINE PRESENT VOLTAGE_NOW INPUT_CURRENT_NOW INPUT_CURRENT_SETTLED PD_ACTIVE QUICK_CHARGE_TYPE HVDCP3_TYPE)" \
     "$(juev $B/uevent HEALTH CHARGE_TYPE DIE_HEALTH INPUT_CURRENT_LIMITED VOLTAGE_MAX)"
   printf '"bl":{"raw":%s,"max":%s},' "$(jnum "$(backlight)")" "$(jnum "$(backlight_max)")"
-  printf '"cc":{"node":"%s","smart":%s,"lvl":%s,"max":%s,"ok":%s,"own":%s,"uev":%s,"reg":%s},' "$CCLN" "${CC_SMART:-1}" "$(jnum "$(rd "$CCL")")" "$(jnum "$(rd "$CCLMAX")")" "$(jnum "$(stv ccok)")" "$(jnum "$(stv cc)")" $u "$(jnum "$(stv reg)")"
+  printf '"cc":{"node":"%s","tbl":"%s","fb":%s,"smart":%s,"lvl":%s,"max":%s,"ok":%s,"own":%s,"uev":%s,"reg":%s},' "$CCLN" "$(stv tbl)" "$(jnum "$(stv fb)")" "${CC_SMART:-1}" "$(jnum "$(rd "$CCL")")" "$(jnum "$(rd "$CCLMAX")")" "$(jnum "$(stv ccok)")" "$(jnum "$(stv cc)")" $u "$(jnum "$(stv reg)")"
   printf '"diag":%s' "$(jstr "$(rd "$D/diag.status")")"
 }
 jhist() {
   [ -f "$HIST" ] || { printf '[]'; return; }
-  awk -F, -v from=$(( $(date +%s) - 86400 )) 'BEGIN { printf "[" } $1 >= from { printf "%s[%s,%s,%s,%s,%d,%d,%d,%d]", (n++ ? "," : ""), $1, $2, $3, $5, ($6 == "off"), ($7 != "off"), ($8 == 1), ($4 == "Charging") } END { printf "]" }' "$HIST"
+  awk -F, -v from=$(( $(date +%s) - 86400 )) 'BEGIN { printf "[" } $1 >= from { printf "%s[%s,%s,%s,%s,%d,%d,%d,%d,%s]", (n++ ? "," : ""), $1, $2, $3, $5, ($6 == "off"), ($7 != "off"), ($8 == 1), ($4 == "Charging"), ($9 ~ /^[0-9]+$/ ? $9 : "null") } END { printf "]" }' "$HIST"
+}
+# Обычный расход за 7 дней, мА: с экраном и во сне. Короткий шаг — по току, долгий (телефон спал) — по падению
+# заряда (в сотых долях процента, если ядро их отдаёт).
+# Typical drain over 7 days, mA: screen on and asleep. Short step — by current, long (phone slept) — by charge
+# drop (in hundredths of a percent when the kernel reports them).
+jtyp() {
+  [ -f "$HIST" ] || { printf '{"on":null,"off":null}'; return; }
+  rdv _full $B/charge_full
+  awk -F, -v from=$(( $(date +%s) - 7 * 86400 )) -v full="${_full:-4000000}" '
+    $1 >= from { if (pt && p8 == 0 && $8 == 0 && $1 > pt && $1 - pt <= 43200 && $2 <= pc) {
+        dt = $1 - pt; k = (p7 == "off") ? "off" : "on"
+        if (dt <= 400) mah = (p5 + $5) / 2 * dt / 3600
+        else mah = (($9 ~ /^[0-9]+$/ && p9 ~ /^[0-9]+$/) ? (p9 - $9) / 100 : pc - $2) * full / 100000
+        if (mah >= 0) { q[k] += mah; h[k] += dt / 3600 } }
+      pt = $1; pc = $2; p5 = $5; p7 = $7; p8 = $8; p9 = $9 }
+    END { printf "{\"on\":%s,\"off\":%s}", (h["on"] >= 1 ? int(q["on"] / h["on"]) : "null"), (h["off"] >= 1 ? int(q["off"] / h["off"]) : "null") }' "$HIST"
 }
 json() {
   m=$(mono_s); b=$(boot_s); ds=null; [ -n "$m" ] && [ "${b:-0}" -gt 0 ] && { ds=$((100 - m * 100 / b)); [ $ds -lt 0 ] && ds=0; }
   printf '{"version":"%s","lang":"%s","skin":"%s",' "$(version)" "$(ui_lang)" "$SKIN"
   printf '"ok":{"powerhint":"%s","thermal":"%s"},' "$(ph_edits)" "$(rd "$D/thermal.state")"
-  printf '"conf":{"limit":%s,"resume":%s,"hot":%s,"hotResume":%s,"usbFast":%s,"littleMax":%s,"bigMax":%s,"bright":%s,"autoBatt":%s,"saverBatt":%s,"thermalChg":%s,"drainAlert":%s,"uiLang":"%s","ack":"%s"},' \
-    "$CHARGE_LIMIT" "$CHARGE_RESUME" "$HOT_PAUSE" "$HOT_RESUME" "$USB_FAST" "$LITTLE_MAX" "${BIG_MAX:-0}" "$BRIGHT_CHARGE" "$AUTO_BATT" "$SAVER_BATT" "$THERMAL_CHG" "$DRAIN_ALERT" "$UI_LANG" "$ACK"
+  printf '"conf":{"limit":%s,"resume":%s,"hot":%s,"hotResume":%s,"usbFast":%s,"littleMax":%s,"bigMax":%s,"bright":%s,"autoBatt":%s,"saverBatt":%s,"thermalChg":%s,"drainAlert":%s,"uiLang":"%s","ack":"%s","appLog":%s,"notify":%s,"fullBy":"%s"},' \
+    "$CHARGE_LIMIT" "$CHARGE_RESUME" "$HOT_PAUSE" "$HOT_RESUME" "$USB_FAST" "$LITTLE_MAX" "${BIG_MAX:-0}" "$BRIGHT_CHARGE" "$AUTO_BATT" "$SAVER_BATT" "$THERMAL_CHG" "$DRAIN_ALERT" "$UI_LANG" "$ACK" "$APP_LOG" "$NOTIFY" "$FULL_BY"
   printf '"full":%s,"design":%s,"cycles":%s,"sleep":%s,"sims":%s,"saver":%s,"brMode":%s,' "$(jnum "$(rd $B/charge_full)")" "$(jnum "$(rd $B/charge_full_design)")" "$(jnum "$(rd $B/cycle_count)")" $ds "$(jnum "$(sims)")" "$(jnum "$(saver_get)")" "$(jnum "$(sget system screen_brightness_mode)")"
   printf '"littleFreqs":%s,"bigFreqs":%s,' "$(jarr "$(rd $CPU0/scaling_available_frequencies)")" "$(jarr "$(rd $CPU6/scaling_available_frequencies)")"
   printf '"dist":{"little":%s,"big":%s,"gpu":%s},' "$(jdist $CPU0/stats/time_in_state 1000)" "$(jdist $CPU6/stats/time_in_state 1000)" \
@@ -99,7 +116,7 @@ json() {
   dt_cache 2>/dev/null
   printf '"dt":{'; n=0; for k in fcc qc3 qc3cp qc2 dcp pd; do [ $n = 1 ] && printf ','; n=1; printf '"%s":%s' $k "$(jarr "$(sed -n "s/^$k=//p" "$D/dt.tables" 2>/dev/null)")"; done; printf '},'
   printf '"drainAlert":%s,' "$(jarr "$(rd "$D/drain.alert")")"
-  printf '"history":%s,"drain":%s,"sessions":%s,"events":%s,' "$(jhist)" "$(jlines "$DRAIN" 60)" "$(jlines "$SESS" 10)" "$(jlines "$LOG" 60)"
+  printf '"history":%s,"drain":%s,"sessions":%s,"events":%s,"typ":%s,' "$(jhist)" "$(jlines "$DRAIN" 60)" "$(jlines "$SESS" 10)" "$(jlines "$LOG" 10)" "$(jtyp)"
   jcommon; printf '}\n'
 }
 live() { printf '{"live":true,'; jcommon; printf '}\n'; }
@@ -112,9 +129,15 @@ logs() {
   echo; echo "-- $(t r_events)"; render_log "$LOG"
   echo; echo "-- sessions (start,end,from%,to%,avg mA,max temp×10,charger,max W,mode,screen on %,JEITA lag s)"; cat "$SESS" 2>/dev/null
   echo; echo "-- drain (end,seconds,−%,mAh,deep sleep %,mobile MB,mobile share %,SIMs)"; cat "$DRAIN" 2>/dev/null
-  echo; echo "-- history (time,%,temp×10,status,mA,charging,screen,cable), last 60"; tail -n 60 "$HIST" 2>/dev/null
+  echo; echo "-- history (time,%,temp×10,status,mA,charging,screen,cable,0.01%), last 60"; tail -n 60 "$HIST" 2>/dev/null
 }
-fname() { outname "$1"; }
+set_freq() {  # little|big МГц (0 = без предела) / MHz (0 = no limit)
+  if [ "$1" = little ]; then pol=$CPU0; key=LITTLE_MAX; else pol=$CPU6; key=BIG_MAX; fi
+  if [ "$2" = 0 ]; then setc $key 0; rd $pol/cpuinfo_max_freq > $pol/scaling_max_freq; return 0; fi
+  f=""; for x in $(rd $pol/scaling_available_frequencies); do [ $(( x / 1000 )) -le "$2" ] && f=$x; done
+  [ -n "$f" ] || return 1
+  setc $key "$f"; echo "$f" > $pol/scaling_max_freq
+}
 
 cmd=$1; shift
 case "$cmd" in
@@ -122,14 +145,15 @@ case "$cmd" in
   json) json ;;
   live) live ;;
   strings) jstrings ;;
+  events) jlines "$LOG" 400; echo ;;
   logs) logs ;;
   savelogs)
-    PANEL_HOST=$1; mkdir -p "$OUT"; f=$(fname log)
+    PANEL_HOST=$1; mkdir -p "$OUT"; f=$(outname log)
     logs > "$f" && { ev log_saved "${f#"$R"}"; echo "${f#"$R"}"; } ;;
   diag)
     case "$(rd "$D/diag.status")" in [0-9]*/*)
-      [ -n "$(find "$D/diag.status" -mmin -5 2>/dev/null)" ] && { echo busy; exit 0; } ;; esac
-    echo "0/12" > "$D/diag.status"
+      [ -n "$(find "$D/diag.status" -mmin -3 2>/dev/null)" ] && { echo busy; exit 0; } ;; esac
+    put "$D/diag.status" "0/12 $(date +%s)"
     # отдельный сеанс: не умирает вместе с оболочкой панели / own session: survives the panel shell
     PANEL_HOST=$1 setsid nohup sh "$MODDIR/diag.sh" >/dev/null 2>&1 </dev/null &
     echo started ;;
@@ -146,17 +170,12 @@ case "$cmd" in
     setc HOT_PAUSE "$1"; setc HOT_RESUME $(( $1 > 0 ? $1 - 4 : 38 )); wake_daemon; ev set_hot "$1" ;;
   little|big)
     num "$1" || fail e_range 0 3000
-    if [ "$cmd" = little ]; then pol=$CPU0; key=LITTLE_MAX; else pol=$CPU6; key=BIG_MAX; fi
-    if [ "$1" = 0 ]; then setc $key 0; rd $pol/cpuinfo_max_freq > $pol/scaling_max_freq
-    else
-      f=$(for x in $(rd $pol/scaling_available_frequencies); do [ $(( x / 1000 )) -le "$1" ] && echo "$x"; done | tail -n 1)
-      [ -n "$f" ] || fail e_freq
-      setc $key "$f"; echo "$f" > $pol/scaling_max_freq
-    fi
+    set_freq "$cmd" "$1" || fail e_freq
     ev "set_freq_$cmd" "$1" ;;
   profile)
     case "$1" in perf) l=0; b=0 ;; balance) l=1612; b=0 ;; eco) l=1324; b=1708 ;; *) fail e_arg ;; esac
-    sh "$0" little $l >/dev/null && sh "$0" big $b >/dev/null && ev "set_profile_$1" ;;
+    set_freq little $l && set_freq big $b || fail e_freq
+    ev "set_profile_$1" ;;
   chgmode)
     case "$1" in
       care) setc CC_SMART 1; setc HOT_PAUSE 42; setc HOT_RESUME 38 ;;
@@ -176,12 +195,22 @@ case "$cmd" in
   drainalert) bit "$1" || fail e_arg; setc DRAIN_ALERT "$1" ;;
   lang) case "$1" in auto|ru|en) setc UI_LANG "$1"; UI_LANG=$1; wake_daemon ;; *) fail e_arg ;; esac ;;
   skin) case "$1" in blue|red|black) setc SKIN "$1" ;; *) fail e_arg ;; esac ;;
-  resetsw) rm -f "$D/bad_switches"; ev set_resetsw ;;
+  fullby)  # зарядить до 100% к времени ЧЧ:ММ или off / charge to 100% by HH:MM, or off
+    case "$1" in
+      off) setc FULL_BY ""; ev set_fullby_off ;;
+      [0-1][0-9]:[0-5][0-9]|2[0-3]:[0-5][0-9]) setc FULL_BY "$1"; ev set_fullby "$1" ;;
+      *) fail e_arg ;;
+    esac
+    wake_daemon ;;
+  applog) bit "$1" || fail e_arg; setc APP_LOG "$1"; ev "set_applog_$1" ;;
+  notify)
+    bit "$1" || fail e_arg; setc NOTIFY "$1"; NOTIFY=$1; ev "set_notify_$1"
+    [ "$1" = 1 ] && notify test "$(t n_title)" "$(t n_test)"; true ;;
   ack)  # предупреждение прочитано (ack ID) или снова показывать (ack -ID) / warning read, or show it again
     case "$1" in -*) id=${1#-} ;; *) id=$1 ;; esac
     case "$id" in ''|*[!a-z]*) fail e_arg ;; esac
     a=$(for x in $ACK; do [ "$x" != "$id" ] && echo "$x"; done | tr '\n' ' ')
     [ "${1#-}" = "$1" ] && a="$a $id"
     a=$(echo $a); setc ACK "\"$a\"" ;;
-  *) echo "panel json live strings logs savelogs diag changelog full [off] limit N hot N little N big N profile perf|balance|eco chgmode care|fast thermalchg 0|1 brightcharge 0|1 autobatt 0|1 saver 0|1 usbfast 0|1 drainalert 0|1 lang auto|ru|en skin blue|red|black resetsw ack [-]ID" ;;
+  *) echo "panel json live strings events logs savelogs diag changelog full [off] limit N hot N little N big N profile perf|balance|eco chgmode care|fast thermalchg 0|1 brightcharge 0|1 autobatt 0|1 saver 0|1 usbfast 0|1 drainalert 0|1 fullby HH:MM|off applog 0|1 notify 0|1 lang auto|ru|en skin blue|red|black ack [-]ID" ;;
 esac

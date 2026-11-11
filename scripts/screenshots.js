@@ -15,7 +15,6 @@ J.daemon = true; J.ok.thermal = 'module'; J.drainAlert = [];
     for (const [n, id] of [[2, 'cCharge'], [3, 'cUse']]) {
       await p.evaluate(id => { document.getElementById('dock').style.display = 'none'; document.getElementById('ladder').style.display = 'none'; scrollTo(0, document.getElementById(id).offsetTop - 8); }, id);
       await p.waitForTimeout(400);
-      if (n === 3) await p.evaluate(() => scrollBy(0, 520));
       await p.waitForTimeout(300); await p.screenshot({ path: path.join(OUT, `panel-${n}${sfx}.png`) });
     }
     await p.close();

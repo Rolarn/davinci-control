@@ -15,7 +15,9 @@ MODDIR=${0%/*}
     sh "$MODDIR/daemon.sh" >/dev/null 2>&1 </dev/null
     { [ -f "$MODDIR/disable" ] || [ -f "$MODDIR/remove" ]; } && break
     n=$((n + 1)); ev daemon_restart "$n"
-    [ $n -ge 20 ] && { ev daemon_giveup; break; }
+    # страховка: служба не поднимается — зарядку включить, ограничение тока снять
+    # failsafe: the service will not come back — turn charging on and lift the current limit
+    [ $n -ge 20 ] && { failsafe; ev daemon_giveup; break; }
     sleep 10
   done
 ) &

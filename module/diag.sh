@@ -1,7 +1,8 @@
 #!/system/bin/sh
-# Davinci Control — диагностика в один файл (только чтение). Ход: $D/diag.status «N/12» / «done:путь» / «error:…».
+# Davinci Control — диагностика в один файл (только чтение), около минуты.
+# Ход: $D/diag.status «N/12 время_начала» / «done:путь» / «error:…».
 # Личные данные (почта, IP, MAC, длинные номера) в файле маскируются.
-# Diagnostics into one file (read-only). Personal data (e-mail, IP, MAC, long numbers) is masked.
+# Diagnostics into one file (read-only), about a minute. Personal data (e-mail, IP, MAC, long numbers) is masked.
 MODDIR=${MODDIR:-${0%/*}}
 . "$MODDIR/common.sh"
 load_conf
@@ -13,11 +14,20 @@ STEPS=12; n=0
 # сбора и выход из группы процессов приложения. / Keep the phone awake while collecting and leave the panel
 # app's cgroup so the app freezer does not pause us when the panel goes to the background.
 WL=davinci_control_diag
-# с тайм-аутом 5 мин: даже если процесс убьют, блокировка снимется сама / 5 min timeout: released even if killed
-{ echo "$WL 300000000000" > $R/sys/power/wake_lock; } 2>/dev/null
+# с тайм-аутом 3 мин: даже если процесс убьют, блокировка снимется сама / 3 min timeout: released even if killed
+{ echo "$WL 180000000000" > $R/sys/power/wake_lock; } 2>/dev/null
 { echo $$ > $R/sys/fs/cgroup/cgroup.procs; } 2>/dev/null
 trap '{ echo $WL > $R/sys/power/wake_unlock; } 2>/dev/null' EXIT
-step() { n=$((n + 1)); echo "$n/$STEPS" > "$D/diag.status"; printf '\n\n########## %s. %s ##########\n' "$n" "$*"; }
+T0=$(date +%s); TS=$T0
+# Шаг: в заголовке — сколько занял предыдущий; панель видит номер шага. / each header shows the previous step's time.
+step() {
+  _now=$(date +%s); [ $n -gt 0 ] && printf '\n(step %s took %s s)\n' "$n" "$((_now - TS))"; TS=$_now
+  n=$((n + 1)); put "$D/diag.status" "$n/$STEPS $T0"; printf '\n\n########## %s. %s ##########\n' "$n" "$*"
+}
+# Любая внешняя команда — не дольше 10 с: одна зависшая не задерживает весь отчёт.
+# Any external command — at most 10 s: one stuck command does not hold the whole report.
+LIM=${DIAG_LIM:-10}   # DIAG_LIM — только для тестового стенда / test bench hook only
+lim() { timeout "$LIM" "$@" 2>/dev/null; }
 h() { printf '\n===== %s =====\n' "$*"; }
 kv() { for f in "$@"; do [ -r "$f" ] && printf '%s = %s\n' "${f#"$R"}" "$(tr '\n' ' ' < "$f" 2>/dev/null | cut -c1-500)"; done; }
 dump_dir() { for f in "$1"/*; do [ -f "$f" ] && [ -r "$f" ] && printf '%s = %s\n' "${f##*/}" "$(head -c 400 "$f" 2>/dev/null | tr '\n' ' ')"; done; }
@@ -33,7 +43,7 @@ mask() {
 {
 header diag
 step "General"
-getprop ro.build.fingerprint
+lim getprop ro.build.fingerprint
 uname -a; cat $R/proc/uptime; cat $R/proc/loadavg
 h "Modules"
 for m in $R/data/adb/modules/*; do
@@ -44,12 +54,13 @@ step "Module report and log"
 sh "$MODDIR/tune.sh" logs 2>&1
 
 step "Battery and charging"
-h "battery/uevent"; cat $B/uevent 2>/dev/null
-h "usb/uevent"; cat $U/uevent 2>/dev/null
-h "SMB1390 charge pump"; cat $CP/uevent 2>/dev/null || echo "-"
-# cp_isns и cp_die_temp при выключенном насосе дёргают АЦП впустую — пропускаем
-# cp_isns and cp_die_temp poke the ADC for nothing while the pump is off — skipped
-for f in $CP/*; do case "${f##*/}" in cp_isns*|cp_die_temp) continue ;; esac; [ -f "$f" ] && [ -r "$f" ] && printf '%s = %s\n' "${f##*/}" "$(head -c 80 "$f" 2>/dev/null | tr '\n' ' ')"; done
+h "battery/uevent"; lim cat $B/uevent
+h "usb/uevent"; lim cat $U/uevent
+h "bms/uevent"; lim cat $BMS/uevent
+h "SMB1390 charge pump"; if [ "$(rd $CP/cp_enable)" = 1 ]; then lim cat $CP/uevent; else echo "off (cp_enable=$(rd $CP/cp_enable))"; fi
+# cp_isns и cp_die_temp при выключенной микросхеме дёргают АЦП впустую — пропускаем
+# cp_isns and cp_die_temp poke the ADC for nothing while the chip is off — skipped
+for f in $CP/*; do case "${f##*/}" in cp_isns*|cp_die_temp|uevent) continue ;; esac; [ -f "$f" ] && [ -r "$f" ] && printf '%s = %s\n' "${f##*/}" "$(head -c 80 "$f" 2>/dev/null | tr '\n' ' ')"; done
 h "Chip temperatures (°C×10)"; echo "battery=$(rd $B/temp) pm6150=$(t_pmic) smb1390=$(t_cp) connector=$(t_conn)"
 h "Writable power_supply nodes"
 for f in $B/* $U/* $R/sys/class/power_supply/main/*; do [ -f "$f" ] && case "$(stat -c %A "$f" 2>/dev/null)" in -rw*) printf '%s = %s\n' "${f#*/power_supply/}" "$(head -c 80 "$f" 2>/dev/null | tr '\n' ' ')" ;; esac; done
@@ -95,7 +106,7 @@ step "Thermal"
 for z in $R/sys/class/thermal/thermal_zone*; do [ -r "$z/temp" ] && printf '%-28s %8s\n' "$(rd "$z/type")" "$(rd "$z/temp")"; done
 h "Cooling devices"
 for c in $R/sys/class/thermal/cooling_device*; do [ -r "$c/type" ] && printf '%-28s cur=%s max=%s\n' "$(rd "$c/type")" "$(rd "$c/cur_state")" "$(rd "$c/max_state")"; done
-h "dumpsys thermalservice"; dumpsys thermalservice 2>/dev/null | head -n 80
+h "dumpsys thermalservice"; lim dumpsys -t 8 thermalservice | head -n 80
 
 step "Memory"
 cat $R/proc/meminfo
@@ -106,19 +117,21 @@ for d in $R/sys/class/net/*; do [ -r "$d/statistics/rx_bytes" ] && printf '%-16s
 echo "active SIMs: $(sims)"
 
 step "Sleep and wakeups"
-kv $R/sys/power/wakeup_count $R/sys/kernel/wakeup_reasons/last_resume_reason
-h "suspend_control_internal"; dumpsys suspend_control_internal 2>/dev/null | head -n 150
-h "deviceidle"; dumpsys deviceidle 2>/dev/null | head -n 40
+# /sys/power/wakeup_count не читаем: чтение ждёт, пока в системе нет активных блокировок сна, то есть может висеть минутами
+# /sys/power/wakeup_count is not read: the read blocks while any wakeup source is active, i.e. for minutes
+kv $R/sys/kernel/wakeup_reasons/last_resume_reason
+h "suspend_control_internal"; lim dumpsys -t 8 suspend_control_internal | head -n 150
+h "deviceidle"; lim dumpsys -t 8 deviceidle | head -n 40
 echo "brightness: $(sget system screen_brightness) mode: $(sget system screen_brightness_mode) saver: $(sget global low_power)"
 echo "busybox: ${BB:-none} · uevent: $("$BB" --list 2>/dev/null | grep -qx uevent && echo yes || echo no)"
 
 step "Battery stats since last charge"
-dumpsys batterystats --charged 2>/dev/null | head -n 2500
+timeout $((LIM * 2)) dumpsys -t 18 batterystats --charged 2>/dev/null | head -n 2500
 
 step "Load"
-top -b -n 1 2>/dev/null | head -n 32
-h "Android errors (last 150)"; logcat -d -b main,system -t 150 '*:E' 2>/dev/null
-h "Kernel log (last 120)"; dmesg 2>/dev/null | tail -n 120
+lim top -b -n 1 | head -n 32
+h "Android errors (last 150)"; lim logcat -d -b main,system -t 150 '*:E'
+h "Kernel log (last 120)"; lim dmesg | grep -v 'ibat_ua =' | tail -n 120
 
 step "30 s monitor"
 j=0
@@ -126,8 +139,9 @@ while [ $j -lt 15 ]; do
   echo "t=$((j * 2))s little=$(rd $CPU0/scaling_cur_freq) big=$(rd $CPU6/scaling_cur_freq) gpu=$(rd $K/devfreq/cur_freq) cpuT=$(zt cpu-1-0-usr) body=$(zt quiet_therm) bat=$(rd $B/temp) pmic=$(t_pmic) cp=$(t_cp) I=$(rd $B/current_now) st=$(rd $B/status)"
   sleep 2; j=$((j + 1))
 done
-echo; echo "== end $(date '+%H:%M:%S')"
+printf '\n(step %s took %s s)\n' "$n" "$(( $(date +%s) - TS ))"
+echo; echo "== end $(date '+%H:%M:%S') · total $(( $(date +%s) - T0 )) s"
 } > "$TMP" 2>&1
 
-if [ -s "$TMP" ] && mask < "$TMP" > "$F"; then rm -f "$TMP"; echo "done:${F#"$R"}" > "$D/diag.status"; ev diag_saved "${F#"$R"}"
-else rm -f "$TMP"; echo "error:write" > "$D/diag.status"; fi
+if [ -s "$TMP" ] && mask < "$TMP" > "$F"; then rm -f "$TMP"; put "$D/diag.status" "done:${F#"$R"}"; ev diag_saved "${F#"$R"}"
+else rm -f "$TMP"; put "$D/diag.status" "error:write"; fi

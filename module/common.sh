@@ -16,6 +16,7 @@ P=$R/vendor/etc/powerhint.json
 B=$R/sys/class/power_supply/battery
 U=$R/sys/class/power_supply/usb
 CP=$R/sys/class/power_supply/charge_pump_master
+BMS=$R/sys/class/power_supply/bms
 CPU0=$R/sys/devices/system/cpu/cpufreq/policy0
 CPU6=$R/sys/devices/system/cpu/cpufreq/policy6
 FFC=$R/sys/kernel/fast_charge/force_fast_charge
@@ -27,8 +28,27 @@ SWITCHES="charging_enabled:1:0 battery_charging_enabled:1:0 input_suspend:0:1"
 defaults() {
   CHARGE_LIMIT=80; CHARGE_RESUME=75; HOT_PAUSE=42; HOT_RESUME=38; USB_FAST=1; LITTLE_MAX=1612800; BIG_MAX=0
   BRIGHT_CHARGE=0; AUTO_BATT=1; SAVER_BATT=1; THERMAL_CHG=0; CC_SMART=1; UI_LANG=auto; SKIN=blue; DRAIN_ALERT=1; ACK=""
+  APP_LOG=0; NOTIFY=0; FULL_BY=""
 }
-load_conf() { defaults; [ -f "$CONF" ] && . "$CONF"; }
+# Число в границах, иначе значение по умолчанию: испорченная настройка не должна ронять службу.
+# A number within bounds, otherwise the default: a broken setting must not crash the service.
+_num() {  # ИМЯ мин макс по_умолчанию / NAME min max default
+  eval "_v=\$$1"
+  case "$_v" in ''|*[!0-9]*) eval "$1=$4"; return 0 ;; esac
+  { [ "$_v" -lt "$2" ] || [ "$_v" -gt "$3" ]; } && eval "$1=$4"
+  return 0
+}
+load_conf() {
+  defaults; [ -f "$CONF" ] && . "$CONF"
+  _num CHARGE_LIMIT 50 100 80; _num CHARGE_RESUME 40 100 $((CHARGE_LIMIT - 5)); _num HOT_PAUSE 0 50 42; _num HOT_RESUME 30 50 38
+  _num LITTLE_MAX 0 4000000 1612800; _num BIG_MAX 0 4000000 0
+  for _k in USB_FAST AUTO_BATT SAVER_BATT CC_SMART DRAIN_ALERT; do _num $_k 0 1 1; done
+  for _k in BRIGHT_CHARGE THERMAL_CHG APP_LOG NOTIFY; do _num $_k 0 1 0; done
+  case "$UI_LANG" in auto|ru|en) ;; *) UI_LANG=auto ;; esac
+  case "$SKIN" in blue|red|black) ;; *) SKIN=blue ;; esac
+  case "$FULL_BY" in [0-1][0-9]:[0-5][0-9]|2[0-3]:[0-5][0-9]) ;; *) FULL_BY="" ;; esac
+  case "$ACK" in *[!a-z\ ]*) ACK="" ;; esac
+}
 write_default_conf() {
   [ -f "$CONF" ] && return
   mkdir -p "$D"
@@ -49,10 +69,18 @@ THERMAL_CHG=0
 UI_LANG=auto
 SKIN=blue
 DRAIN_ALERT=1
+APP_LOG=0
+NOTIFY=0
+FULL_BY=
 EOF
 }
 
-rd() { cat "$1" 2>/dev/null; }
+# Первая строка файла без запуска cat (у службы и панели сотни чтений) / first line of a file, no cat spawned
+rd() { _rd=""; { IFS= read -r _rd < "$1"; } 2>/dev/null; [ -n "$_rd" ] && printf '%s\n' "$_rd"; }
+# То же в переменную, без подоболочки / same into a variable, no subshell: rdv ИМЯ ФАЙЛ
+rdv() { eval "$1=''"; { IFS= read -r "$1" < "$2"; } 2>/dev/null; return 0; }
+# Запись целиком или никак: панель не прочитает половину файла / all-or-nothing write
+put() { printf '%s\n' "$2" > "$1.tmp" && mv -f "$1.tmp" "$1"; }
 version() { sed -n 's/^version=//p' "$MODDIR/module.prop" 2>/dev/null; }
 # версия без кода коммита — для имён файлов / version without the commit — for file names
 vname() { version | cut -d' ' -f1; }
@@ -131,12 +159,10 @@ mono_s() { awk '/now at/ { print int($3 / 1000000000); exit }' $R/proc/timer_lis
 boot_s() { awk '{ print int($1) }' $R/proc/uptime; }
 backlight() { for f in $R/sys/class/backlight/*/brightness; do rd "$f"; return; done; }
 backlight_max() { for f in $R/sys/class/backlight/*/max_brightness; do rd "$f"; return; done; }
-HBM=$R/sys/devices/platform/soc/soc:qcom,dsi-display/hbm
-set_hbm() { [ -f $HBM ] || return 1; echo "$1" > $HBM 2>/dev/null; }
-# Температуры микросхем, °C×10: зарядка PM6150, зарядный насос SMB1390, разъём. / chip temperatures, °C×10.
+# Температуры, °C×10: контроллер зарядки PM6150, микросхема быстрой зарядки SMB1390 (charge pump), разъём.
 # АЦП иногда отвечает ошибкой — одна повторная попытка / the ADC sometimes errors — one retry
 t_pmic() { v=$(rd $B/charger_temp); [ -n "$v" ] || v=$(rd $B/charger_temp); [ -n "$v" ] && echo "$v"; }
-# у SMB1390 температура есть только пока насос включён / SMB1390 reports temperature only while enabled
+# SMB1390 (микросхема быстрой зарядки) отдаёт температуру, только пока включена / only while enabled
 t_cp() { [ "$(rd $CP/cp_enable)" = 1 ] || return 0; v=$(rd $CP/cp_die_temp); [ -n "$v" ] && echo "$v"; }
 t_conn() { v=$(rd $U/connector_temp); [ -n "$v" ] && { echo "$v"; return; }; zt10 conn_therm usb_conn_therm usb-therm; }
 sims() { getprop gsm.sim.state 2>/dev/null | tr ',' '\n' | grep -cE 'LOADED|READY'; }
@@ -166,10 +192,51 @@ for c in $R/sys/class/thermal/cooling_device*; do
   [ "$(cat "$c/type" 2>/dev/null)" = battery ] && { CCL=$c/cur_state; CCLMAX=$c/max_state; CCLN="${c##*/}(battery)"; break; }
 done
 [ -n "$CCL" ] || { CCL=$B/system_temp_level; CCLMAX=$B/num_system_temp_levels; CCLN=system_temp_level; }
-CC_TOP=12                        # 15+ ядро останавливает зарядку — выше 12 не ставим / never above 12
-REG_HI=440; REG_LO=425; REG_MIN=8   # удержание «Быстро» / fast-mode hold
-CC_STEPS="410:4 430:8 450:12"    # «Бережно»: °C×10 → ступень / care mode steps
-cc_for_temp() { r=0; for s in $CC_STEPS; do [ "$1" -ge "${s%%:*}" ] && r=${s#*:}; done; echo $r; }
+REG_HI=440; REG_LO=425           # удержание «Быстро»: окно датчика, °C×10 / fast-mode hold window
+CC_CAP=13                        # выше не ставим: последние ступени почти останавливают зарядку / never above
+# Какая таблица тока действует сейчас (как в ядре, smblib_therm_charging). / the table in effect now.
+cc_table() {
+  rdv _ty $U/real_type; rdv _cp $U/smb_en_reason
+  case "$_ty" in
+    USB_HVDCP_3) if [ "$_cp" = 1 ]; then echo qc3cp; else echo qc3; fi ;;
+    USB_HVDCP_3P5) echo qc3cp ;; USB_HVDCP) echo qc2 ;; USB_DCP) echo dcp ;; USB_PD) echo pd ;; *) echo fcc ;;
+  esac
+}
+# Ступени по доле от полного тока таблицы: L1 ≈ 89% (3,1 из 3,5 А), L2 ≈ 77% (2,7 А), L3 ≈ 57% (2,0 А).
+# Таблицы у разных блоков разные, поэтому считаем по амперам, а не по номерам ступеней.
+# Levels by share of the table's full current: L1 ≈ 89%, L2 ≈ 77%, L3 ≈ 57%. Tables differ per charger,
+# so levels are picked by amps, not by level numbers.
+cc_plan() {  # $1 = ключ таблицы / table key → L1 L2 L3
+  L1=4; L2=8; L3=12; _t=""
+  [ -f "$D/dt.tables" ] || return 0
+  while IFS='=' read -r _k _vals; do [ "$_k" = "$1" ] && _t=$_vals; done < "$D/dt.tables"
+  [ -n "$_t" ] || return 0
+  set -- $_t; _max=$1; [ "${_max:-0}" -gt 0 ] || return 0
+  _i=0; _a=""; _b=""; _c=""
+  for _x in "$@"; do
+    [ -z "$_a" ] && [ $((_x * 100)) -le $((_max * 89)) ] && _a=$_i
+    [ -z "$_b" ] && [ $((_x * 100)) -le $((_max * 78)) ] && _b=$_i
+    [ -z "$_c" ] && [ $((_x * 100)) -le $((_max * 58)) ] && _c=$_i
+    _i=$((_i + 1))
+  done
+  [ -n "$_a" ] && [ -n "$_b" ] && [ -n "$_c" ] || return 0
+  [ "$_c" -gt $CC_CAP ] && _c=$CC_CAP; [ "$_b" -gt "$_c" ] && _b=$_c; [ "$_a" -gt "$_b" ] && _a=$_b
+  L1=$_a; L2=$_b; L3=$_c
+}
+# Вернуть зарядку и снять ограничение тока (страховка и удаление). / restore charging and lift the limit.
+failsafe() {
+  for _n in charging_enabled battery_charging_enabled; do [ -f "$B/$_n" ] && echo 1 > "$B/$_n"; done 2>/dev/null
+  [ -f "$B/input_suspend" ] && echo 0 > "$B/input_suspend" 2>/dev/null
+  [ -f "$CCL" ] && echo 0 > "$CCL" 2>/dev/null
+  return 0
+}
+# Уведомление в шторке от имени системной оболочки (Android 10+). / a notification via the system shell.
+notify() {  # тег заголовок текст / tag title text
+  [ "$NOTIFY" = 1 ] || return 0
+  # одинарные кавычки убираем: текст идёт внутрь кавычек команды / single quotes are stripped: the text goes inside quotes
+  _nt=$(printf %s "$2" | tr -d "'\\\`\$"); _nx=$(printf %s "$3" | tr -d "'\\\`\$")
+  su 2000 -c "cmd notification post -S bigtext -t '$_nt' 'dc_$1' '$_nx'" </dev/null >/dev/null 2>&1 || true
+}
 PKGL=$R/data/system/packages.list
 daemon_pid() { p=$(rd $D/pid); [ -n "$p" ] && kill -0 "$p" 2>/dev/null && echo "$p"; }
 wake_daemon() { p=$(daemon_pid); [ -n "$p" ] && pkill -P "$p" sleep 2>/dev/null; true; }

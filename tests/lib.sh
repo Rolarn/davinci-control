@@ -31,6 +31,12 @@ mkroot() {  # $1 = файл сценария (необязательно) / opti
   printf 'POWER_SUPPLY_STATUS=Charging\nPOWER_SUPPLY_HEALTH=Good\nPOWER_SUPPLY_CHARGE_TYPE=Fast\nPOWER_SUPPLY_DIE_HEALTH=Cool\nPOWER_SUPPLY_INPUT_CURRENT_LIMITED=0\n' > $B/uevent
   w $C/cp_enable 1; w $C/cp_die_temp 380; printf 'POWER_SUPPLY_NAME=charge_pump_master\nPOWER_SUPPLY_TEMP=380\n' > $C/uevent
   w $U/present 1; w $U/online 1; w $U/connector_temp 350
+  # блок QC3 без микросхемы быстрой зарядки (smb_en_reason=0) / a QC3 charger, charge pump not engaged
+  w $U/real_type USB_HVDCP_3; w $U/voltage_now 8800000; w $U/input_current_now 2000000; w $U/smb_en_reason 0
+  mkdir -p $R/sys/class/power_supply/bms $R/sys/power; w $R/sys/class/power_supply/bms/capacity_raw 4000
+  printf 'POWER_SUPPLY_NAME=bms\nPOWER_SUPPLY_CAPACITY_RAW=4000\n' > $R/sys/class/power_supply/bms/uevent
+  # как на телефоне: чтение wakeup_count висит, пока есть активные блокировки сна / reading it blocks, like on the phone
+  mkfifo $R/sys/power/wakeup_count
   printf 'POWER_SUPPLY_REAL_TYPE=USB_HVDCP_3\nPOWER_SUPPLY_ONLINE=1\nPOWER_SUPPLY_VOLTAGE_NOW=8800000\nPOWER_SUPPLY_INPUT_CURRENT_NOW=2000000\nPOWER_SUPPLY_QUICK_CHARGE_TYPE=1\n' > $U/uevent
   w $R/sys/class/backlight/panel0-backlight/brightness 1000; w $R/sys/class/backlight/panel0-backlight/max_brightness 2047
   w $R/sys/kernel/fast_charge/force_fast_charge 1; w $R/sys/class/net/rmnet_data0/statistics/rx_bytes 1000; w $R/sys/class/net/rmnet_data0/statistics/tx_bytes 1000
@@ -46,7 +52,9 @@ mkroot() {  # $1 = файл сценария (необязательно) / opti
   # таблица тока QC3 из device tree: 17 значений, big-endian / QC3 current table, big-endian u32
   dtw() { python3 -c "import struct,sys; v=[int(x) for x in sys.argv[1:]]; sys.stdout.buffer.write(struct.pack('>%dI'%len(v),*v))" $2 > "$R/proc/device-tree/soc/qcom,qpnp-smb5/$1"; }
   dtw qcom,thermal-mitigation "3500000 3400000 3300000 3200000 3100000 3000000 2900000 2800000 2600000 2400000 2200000 2000000 1800000 1500000 1000000 500000"
-  dtw qcom,thermal-fcc-qc3-normal "3500000 3400000 3300000 3200000 3100000 3000000 2900000 2800000 2700000 2600000 2400000 2200000 2000000 1500000 1000000 500000"
+  dtw qcom,thermal-fcc-qc3-normal "3500000 3400000 3300000 3200000 3100000 3000000 2900000 2800000 2700000 2600000 2400000 2200000 2000000 2000000 750000 700000"
+  dtw qcom,thermal-fcc-qc3-cp "3500000 3500000 3500000 3500000 3400000 3300000 3200000 3100000 3000000 2800000 2600000 2400000 2200000 2000000 1000000 700000"
+  dtw qcom,thermal-mitigation-dcp "1800000 1800000 1800000 1800000 1800000 1800000 1800000 1800000 1800000 1700000 1600000 1400000 1200000 1100000 1100000 1000000"
   printf 'com.a 10100 0 /data\n' > $R/data/system/packages.list
   printf '"1017600"\n"1017600"\n"PowerHint": "EXPENSIVE_RENDERING",\n"Node": "GPUMinFreq",\n"Duration": 0,\n"Value": "7"\n' > $R/vendor/etc/powerhint.json
   w $R/now 1700000000; w $R/lowpower 0; w $R/brmode 1
@@ -74,7 +82,7 @@ EOF
   printf '#!/bin/sh\ntrue\n' > $R/bin/logcat; cp $R/bin/logcat $R/bin/dumpsys; cp $R/bin/logcat $R/bin/top; cp $R/bin/logcat $R/bin/dmesg; cp $R/bin/logcat $R/bin/am
   printf '#!/bin/sh\necho package:com.example\n' > $R/bin/pm
   printf '#!/bin/sh\ncase "$1" in -v) echo 31.1;; -V) echo 31100;; esac\n' > $R/bin/magisk
-  printf '#!/bin/bash\n[ "$1" = 2000 ] && bash -c "$3"\n' > $R/bin/su
+  printf '#!/bin/bash\n[ "$1" = 2000 ] && /bin/bash -c "$3"\n' > $R/bin/su
   if [ -n "$1" ]; then sed "s|@R@|$R|g" "$1" > $R/bin/sleep; else printf '#!/bin/sh\ntrue\n' > $R/bin/sleep; fi
   find $R/bin -type f -exec chmod +x {} +
   export R

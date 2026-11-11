@@ -152,13 +152,23 @@ const showLim = v => { $('limVal').textContent = v >= 100 ? t('nolimit') : v + '
 lim.addEventListener('input', () => showLim(+lim.value));
 lim.addEventListener('change', () => { const v = +lim.value; apply('lim', 'limit ' + v, v, d => d.conf.limit === v, $('limConf')); });
 $('full').addEventListener('click', () => { const on = !(data && data.charge.full); apply('full', on ? 'full' : 'full off', on, d => d.charge.full === on, $('fullConf')); });
-for (const [id, cmd, key] of [['brC', 'brightcharge', 'bright'], ['brA', 'autobatt', 'autoBatt'], ['brS', 'saver', 'saverBatt'], ['thC', 'thermalchg', 'thermalChg'], ['usb', 'usbfast', 'usbFast'], ['alert', 'drainalert', 'drainAlert']]) {
+for (const [id, cmd, key] of [['brC', 'brightcharge', 'bright'], ['brA', 'autobatt', 'autoBatt'], ['brS', 'saver', 'saverBatt'], ['thC', 'thermalchg', 'thermalChg'], ['usb', 'usbfast', 'usbFast'], ['alert', 'drainalert', 'drainAlert'], ['appLog', 'applog', 'appLog'], ['ntf', 'notify', 'notify']]) {
   $(id).addEventListener('change', e => {
     let v = e.target.checked ? 1 : 0;
     if (id === 'thC') v = 1 - v;   // переключатель «выключить заводское» / the switch means “turn stock off”
     apply(id, cmd + ' ' + v, v, d => d.conf[key] === v, $(id + 'Conf') || $('limConf'));
   });
 }
+// зарядить к времени / charge by time
+const fbT = $('fbTime'), fbOn = $('fbOn');
+try { const v = localStorage.getItem('dc.fb'); if (/^([01]\d|2[0-3]):[0-5]\d$/.test(v || '')) fbT.value = v; } catch (e) { /* нет хранилища / no storage */ }
+function fbApply() {
+  const v = /^([01]\d|2[0-3]):[0-5]\d$/.test(fbT.value) ? fbT.value : '07:00', want = fbOn.checked ? v : '';
+  try { localStorage.setItem('dc.fb', v); } catch (e) { /* нет хранилища / no storage */ }
+  apply('fb', want ? 'fullby ' + v : 'fullby off', want, d => d.conf.fullBy === want, $('fbConf'));
+}
+fbOn.addEventListener('change', fbApply);
+fbT.addEventListener('change', () => { if (fbOn.checked) fbApply(); });
 
 // ---------- окно и подсказки / sheet and help popovers ----------
 function openSheet(title, node, withBtns) {
@@ -167,20 +177,24 @@ function openSheet(title, node, withBtns) {
 }
 $('mClose').addEventListener('click', () => $('modal').classList.remove('open'));
 $('modal').addEventListener('click', e => { if (e.target.id === 'modal') $('modal').classList.remove('open'); });
+const evRow = l => { const p = l.split('\t'); return [tm(+p[0]), msg(p[1], p.slice(2))]; };
+let sheetText = '';
 $('showLogs').addEventListener('click', async () => {
-  const pre = document.createElement('pre'); pre.id = 'logText'; pre.textContent = t('loading');
-  openSheet(t('all_log'), pre, true);
-  try { pre.textContent = (await sh(`sh ${T} logs`)).stdout; } catch (e) { pre.textContent = t('error', e.message); }
+  const ul = document.createElement('ul'); ul.className = 'log'; sheetText = '';
+  items(ul, [], t('loading')); openSheet(t('all_log'), ul, true);
+  try {
+    const rows = JSON.parse((await sh(`sh ${T} events`)).stdout).reverse().map(evRow);
+    items(ul, rows, t('ev_none')); sheetText = rows.map(r => r[0] + '  ' + r[1]).join('\n');
+  } catch (e) { items(ul, [], t('error', e.message)); }
 });
 $('mCopy').addEventListener('click', async () => {
-  const text = ($('logText') || {}).textContent || '';
+  const text = sheetText;
   try { await navigator.clipboard.writeText(text); toast(t('copied')); return; } catch (e) { /* запасной способ / fallback */ }
   const ta = document.createElement('textarea'); ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
   document.body.appendChild(ta); ta.select(); let ok = false; try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
   ta.remove(); toast(ok ? t('copied') : t('copyfail'));
 });
 async function saveLog() { try { const p = (await sh(`sh ${T} savelogs '${host()}'`)).stdout.trim(); toast(t('saved_to', p.replace('/sdcard/', ''))); } catch (e) { toast(t('error', e.message)); } }
-$('mSave').addEventListener('click', saveLog);
 $('saveLog').addEventListener('click', saveLog);
 async function showChangelog() {
   const box = document.createElement('div'); box.textContent = t('loading');
@@ -198,7 +212,7 @@ async function showChangelog() {
 }
 $('whatsnew').addEventListener('click', showChangelog);
 $('diagBtn').addEventListener('click', async () => {
-  try { const r = (await sh(`sh ${T} diag '${host()}'`)).stdout.trim(); toast(r === 'busy' ? t('diag_busy') : t('diag_started')); inflight = 0; await load(true); } catch (e) { toast(t('error', e.message)); }
+  try { const r = (await sh(`sh ${T} diag '${host()}'`)).stdout.trim(); toast(r === 'busy' ? t('diag_busy') : t('diag_started')); inflight = 0; await load(true); diagTick(); } catch (e) { toast(t('error', e.message)); }
 });
 
 const pop = $('pop'), popA = $('popA');
@@ -340,6 +354,29 @@ function chart(svg, pts, key, lo, hi, color, threshold, now) {
   for (let i = 0; i < pts.length; i++) { if (i && pts[i][0] - pts[i - 1][0] > 1200) flush(); seg.push(x(pts[i][0]).toFixed(1) + ',' + y(key(pts[i])).toFixed(1)); }
   flush(); svg.innerHTML = out;
 }
+// Расход по часам за сутки (сплошная) и обычный уровень за 7 дней (пунктир). Шкала — корень: и сон, и экран видны.
+// Hourly drain over the day (solid) and the typical 7-day level (dashed). Square-root scale: sleep and screen both visible.
+function drainChart(svg, h, fullMah, typ, now) {
+  const N = 24, t0 = now - 86400, mah = new Array(N).fill(0), hrs = new Array(N).fill(0);
+  for (let i = 1; i < h.length; i++) {
+    const a = h[i - 1], b = h[i], dt = b[0] - a[0];
+    if (a[6] || b[6] || dt <= 0 || dt > 43200 || b[1] > a[1]) continue;
+    const q = dt <= 400 ? (Math.max(0, a[3]) + Math.max(0, b[3])) / 2 * dt / 3600 : (a[8] != null && b[8] != null ? (a[8] - b[8]) / 100 : a[1] - b[1]) * fullMah / 100;
+    if (!(q >= 0)) continue;
+    for (let k = Math.max(0, Math.floor((a[0] - t0) / 3600)); k < N && t0 + k * 3600 < b[0]; k++) {
+      const ov = Math.min(b[0], t0 + (k + 1) * 3600) - Math.max(a[0], t0 + k * 3600);
+      if (ov > 0) { mah[k] += q * ov / dt; hrs[k] += ov / 3600; }
+    }
+  }
+  const v = mah.map((m, k) => hrs[k] >= 0.2 ? m / hrs[k] : null), got = v.filter(x => x != null);
+  const top = Math.max(200, typ.on || 0, ...got) * 1.15, y = x => (96 - Math.sqrt(Math.max(0, x) / top) * 90).toFixed(1);
+  let out = '', d = '', prev = false;
+  for (const [val, col] of [[typ.on, 'var(--c2)'], [typ.off, 'var(--ok)']]) if (val != null) out += `<line x1="0" x2="300" y1="${y(val)}" y2="${y(val)}" stroke="${col}" stroke-dasharray="5 4" stroke-width="1.5" vector-effect="non-scaling-stroke"/>`;
+  v.forEach((x, k) => { if (x == null) { prev = false; return; } d += `${prev ? 'L' : 'M'}${(k * 12.5).toFixed(1)},${y(x)}H${((k + 1) * 12.5).toFixed(1)}`; prev = true; });
+  if (d) out += `<path d="${d}" fill="none" stroke="var(--c1)" stroke-width="2" vector-effect="non-scaling-stroke" stroke-linejoin="round"/>`;
+  svg.innerHTML = out;
+  return got.length ? [Math.round(Math.min(...got)), Math.round(Math.max(...got))] : null;
+}
 function dist(el, rows) {
   el.innerHTML = rows && rows.length ? rows.map(([f, p]) => `<div class="dl"><span>${f} MHz</span><span class="b"><i style="width:${Math.min(100, p)}%"></i></span><span class="p">${Math.round(p)}%</span></div>`).join('') : `<div class="empty">${t('nodata')}</div>`;
 }
@@ -353,13 +390,8 @@ function items(el, rows, empty) {
 }
 // какую таблицу ядро берёт для этого блока (smblib_therm_charging) / which table the kernel uses for this charger
 function dtFor(d) {
-  const dt = d.dt || {}, ty = (d.usb || {}).REAL_TYPE || '', pick = k => dt[k] && dt[k].length ? [k, dt[k]] : null;
-  if (ty === 'USB_HVDCP_3') return pick('qc3') || pick('fcc');
-  if (ty === 'USB_HVDCP_3P5') return pick('qc3cp') || pick('fcc');
-  if (ty === 'USB_HVDCP') return pick('qc2') || pick('fcc');
-  if (ty === 'USB_DCP') return pick('dcp') || pick('fcc');
-  if (ty === 'USB_PD') return pick('pd') || pick('fcc');
-  return pick('qc3') || pick('fcc');
+  const dt = d.dt || {}, pick = k => dt[k] && dt[k].length ? [k, dt[k]] : null;
+  return ((d.charge || {}).plugged && pick((d.cc || {}).tbl)) || pick('qc3') || pick('fcc');
 }
 const amps = (d, lvl) => { const x = dtFor(d); return x && x[1][lvl] ? dec(x[1][lvl] / 1e6, 1) : ''; };
 function limiters(d) {
@@ -379,6 +411,8 @@ function limiters(d) {
   if (bat.CHARGE_TYPE === 'Taper' || b.voltage >= 4370000) out.push(['', t('l_taper')]);
   if (!out.length) out.push(['', t('l_none')]);
   if (b.temp >= 400) out.push(['', t('l_sensor')]);
+  const cp = d.chips && d.chips.cp;
+  if (ct || cp) out.push(['', t('l_chips', [ct ? t('l_chip_pmic', Math.round(ct / 10)) : '', cp ? t('l_chip_cp', Math.round(cp / 10)) : ''].filter(Boolean).join(', '))]);
   return out;
 }
 function tcls(el, v, w, b) { el.classList.toggle('hot1', v >= w && v < b); el.classList.toggle('hot2', v >= b); }
@@ -403,6 +437,7 @@ function render(d) {
   else if (c.plugged && cc.reg === 1) setStatus('warn', t('st_hold', dec(I / 1000, 1) + ' A'), 'holding');
   else if (c.plugged && c.state === 'off') setStatus('ok', t('st_limit', cf.limit), 'limit');
   else if (c.plugged && c.full && charging) setStatus('ok', t('st_full'), 'charging');
+  else if (c.plugged && cc.fb === 1 && charging && cf) setStatus('ok', t('st_fullby', cf.fullBy), 'charging');
   else if (charging) setStatus('ok', t('st_charging', dec(I / 1000, 1) + ' A'), 'charging');
   else if (warn) setStatus('warn', t('st_warn'), b.cap <= 15 ? 'low' : 'calm');
   else setStatus('ok', t('st_ok'), (d.diag || '').match(/^\d+\//) ? 'diag' : b.cap <= 15 ? 'low' : 'calm');
@@ -415,7 +450,7 @@ function render(d) {
   $('capS').textContent = [t('st_' + b.status) || b.status, c.plugged ? t('cable') : '', cf && cf.limit < 100 ? t('limit_short', cf.limit) : ''].filter(Boolean).join(' · ');
   const h = d.history || [], rt = rates(h);
   if (charging && cf) {
-    const target = c.full ? 100 : Math.min(100, cf.limit);
+    const target = c.full || cc.fb === 1 ? 100 : Math.min(100, cf.limit);
     $('e1l').textContent = t('to_target', target);
     $('e1').textContent = b.cap >= target ? t('ready') : fmtH((target - b.cap) / 100 * fullMah / Math.max(I, 1));
     $('e1s').textContent = t('at_speed');
@@ -440,6 +475,7 @@ function render(d) {
   if (!c.switch) { st.className = 'cst bad'; st.textContent = t('c_nosw'); }
   else if (!c.plugged) { st.className = 'cst idle'; st.textContent = t('c_nocable'); }
   else if (full) { st.className = 'cst ok'; st.textContent = t('c_full'); }
+  else if (cc.fb === 1 && c.state !== 'off') { st.className = 'cst ok'; st.textContent = t('c_fullby', cf.fullBy); }
   else if (c.state === 'off' && c.why === 'hot') { st.className = 'cst warn'; st.textContent = t('c_hot', dec(b.temp / 10, 1), cf.hotResume); }
   else if (c.state === 'off') { st.className = 'cst ok'; st.textContent = t('c_lim', cf.limit); }
   else if (charging) { st.className = 'cst ok'; st.textContent = t('c_chg'); }
@@ -461,6 +497,10 @@ function render(d) {
   if (document.activeElement !== lim) { lim.value = lv; showLim(lv); }
   mark($('hot'), pend('hot') ?? cf.hot);
   const fb = $('full'); fb.className = 'btn' + (full ? ' on' : ''); fb.textContent = full ? t('full_cancel') : t('full_once');
+  // зарядить к времени / charge by time
+  const fbv = pend('fb') ?? (cf.fullBy || '');
+  fbOn.checked = !!fbv; if (fbv && document.activeElement !== fbT) fbT.value = fbv;
+  $('fbHint').textContent = !fbv ? t('fb_off') : cf.limit >= 100 ? t('fb_nolimit') : cc.fb === 1 && c.plugged ? t('fb_go', fbv) : t('fb_wait', cf.limit, fbv);
   // файлы нагрева / thermal configs
   const th = d.ok.thermal || 'stock', want = pend('thC') ?? cf.thermalChg;
   $('thC').checked = want === 0;
@@ -486,7 +526,7 @@ function render(d) {
   $('blNow').textContent = bl.raw != null && bl.max ? `${Math.round(bl.raw * 100 / bl.max)}% · ${bl.raw} / ${bl.max}` : '—';
   $('blMode').textContent = d.brMode === 1 ? t('auto') : d.brMode === 0 ? t('manual') : '—';
   $('svNow').textContent = d.saver === 1 ? t('on') : d.saver === 0 ? t('offf') : '—';
-  for (const [id, key] of [['brC', 'bright'], ['brA', 'autoBatt'], ['brS', 'saverBatt'], ['alert', 'drainAlert']]) $(id).checked = (pend(id) ?? cf[key]) === 1;
+  for (const [id, key] of [['brC', 'bright'], ['brA', 'autoBatt'], ['brS', 'saverBatt'], ['alert', 'drainAlert'], ['appLog', 'appLog'], ['ntf', 'notify']]) $(id).checked = (pend(id) ?? cf[key]) === 1;
 
   // производительность / performance
   if (!freqsBuilt && d.littleFreqs && d.littleFreqs.length && d.bigFreqs && d.bigFreqs.length) buildFreqs(d.littleFreqs, d.bigFreqs);
@@ -505,6 +545,10 @@ function render(d) {
   const setR = (id, r, rr) => { $(id).textContent = rr ? t('pph', dec(rr, 1)) : '—'; $(id + 'S').textContent = rr ? t('drop_in', r.drop, fmtH(r.dt / 3600)) : t('collecting'); };
   setR('rOn', rt.on, onR); setR('rOff', rt.off, offR);
   const oh = $('offHint'); oh.textContent = offR != null && offR > 2 ? t('off_hint', dec(offR, 1)) : ''; oh.hidden = !oh.textContent;
+  const typ = d.typ || {}, ma = LANG === 'en' ? ' mA' : ' мА', dr = drainChart($('gDrain'), h, fullMah, typ, d.time);
+  $('hDrain').textContent = dr ? `${dr[0]}–${dr[1]}${ma}` : t('collecting');
+  $('lgOn').textContent = t('lg_typ_on', typ.on != null ? typ.on + ma : t('collecting'));
+  $('lgOff').textContent = t('lg_typ_off', typ.off != null ? typ.off + ma : t('collecting'));
   chart($('gCap'), h, p => p[1], 0, 100, 'var(--c1)', cf.limit < 100 ? cf.limit : null, d.time);
   chart($('gTemp'), h, p => p[2] / 10, 20, 50, 'var(--c2)', cf.hot || null, d.time);
   if (h.length) {
@@ -525,22 +569,32 @@ function render(d) {
   $('sleep').textContent = d.sleep == null ? '—' : d.sleep + '%';
 
   // журнал / log
-  items($('events'), (d.events || []).slice(-6).reverse().map(l => { const p = l.split('\t'); return [tm(+p[0]), msg(p[1], p.slice(2))]; }), t('ev_none'));
-  renderDiag(d.diag);
+  items($('events'), (d.events || []).slice(-10).reverse().map(evRow), t('ev_none'));
+  renderDiag(d.diag, d.time);
   mark($('langSeg'), cf.uiLang || 'auto');
 }
-function renderDiag(s) {
+// Ход диагностики: «N/12 время_начала» — шаг, его название и сколько прошло. / diagnostics progress: step, its name, elapsed.
+let diagT = null, diagOff = 0;
+function renderDiag(s, now) {
   s = s || '';
-  const m = s.match(/^(\d+)\/(\d+)$/), btn = $('diagBtn');
+  const m = s.match(/^(\d+)\/(\d+)(?: (\d+))?$/), btn = $('diagBtn');
   if (m) {
+    if (now) diagOff = now - Date.now() / 1000;
+    const el = m[3] ? Math.max(0, Math.round(Date.now() / 1000 + diagOff - +m[3])) : null;
     $('dProgW').style.display = 'block'; $('dProg').style.width = Math.round(+m[1] * 100 / +m[2]) + '%';
-    setConf($('dStat'), 'wait wrap', t('diag_step', m[1], m[2])); btn.disabled = true; btn.textContent = t('diag_run');
+    setConf($('dStat'), 'wait wrap', t('diag_step', m[1], m[2], t('ds_' + m[1])) + (el != null ? ' · ' + Math.floor(el / 60) + ':' + String(el % 60).padStart(2, '0') : ''));
+    btn.disabled = true; btn.textContent = t('diag_run');
+    if (!diagT) diagT = setInterval(diagTick, 1000);
   } else {
+    clearInterval(diagT); diagT = null;
     $('dProgW').style.display = 'none'; btn.disabled = false; btn.textContent = t('diag');
     if (s.startsWith('done:')) setConf($('dStat'), 'ok wrap', '✓ ' + t('diag_done', s.slice(5).replace('/sdcard/', '')));
     else if (s.startsWith('error:')) setConf($('dStat'), 'bad wrap', '✗ ' + s.slice(6));
   }
 }
+// раз в секунду — время, раз в 2 с — свежий шаг / every second the timer, every 2 s a fresh step
+let diagN = 0;
+function diagTick() { if (!data) return; renderDiag(data.diag); if (++diagN % 2 === 0 && document.visibilityState === 'visible') load(true); }
 
 applyLang();
 load();
