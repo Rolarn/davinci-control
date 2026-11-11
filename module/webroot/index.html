@@ -58,7 +58,7 @@
         <div class="switch"><div class="fbrow"><input type="time" id="fbTime" value="07:00" data-label="fullby"><span class="hint" id="fbHint"></span></div><label class="tg"><input type="checkbox" id="fbOn" data-label="fullby"><i></i></label></div>
         <div class="conf" id="fbConf"></div></div>
       <div class="ctl"><div class="lab"><span data-t="thermal"></span><button class="q" data-help="h_thermal"></button></div>
-        <div class="switch"><div><span class="hint" id="thState"></span></div><label class="tg"><input type="checkbox" id="thC" data-label="th_toggle"><i></i></label></div>
+        <div class="switch"><div><span class="hint" id="thState"></span><span class="hint next" id="thNext"></span></div><label class="tg"><input type="checkbox" id="thC" data-label="thermal"><i></i></label></div>
         <div class="conf" id="thCConf"></div></div>
       <div class="ctl" id="usbCtl"><div class="lab"><span data-t="usbfast"></span><button class="q" data-help="h_usb"></button></div>
         <div class="switch"><div><span class="hint" data-t="usbfast_s"></span></div><label class="tg"><input type="checkbox" id="usb" data-label="usbfast"><i></i></label></div>
@@ -146,6 +146,9 @@
         <div class="hint" data-t="diag_hint"></div></div>
       <div class="ctl"><button class="btn sec" id="saveLog" type="button" data-t="savelog"></button>
         <div class="hint" data-t="savelog_hint"></div></div>
+      <div class="ctl"><button class="btn sec" id="restartBtn" type="button" data-t="restart"></button>
+        <div class="conf wrap" id="rsConf"></div>
+        <div class="hint" data-t="restart_hint"></div></div>
       <div class="ctl"><div class="switch"><div><b data-t="applog"></b><span class="hint" data-t="applog_s"></span></div>
         <button class="q" data-help="h_applog"></button><label class="tg"><input type="checkbox" id="appLog" data-label="applog"><i></i></label></div><div class="conf" id="appLogConf"></div></div>
     </div>

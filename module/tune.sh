@@ -63,6 +63,24 @@ juev() {
   awk -F= -v keys=" $* " 'BEGIN { printf "{" } { k = $1; sub(/^POWER_SUPPLY_/, "", k); if (index(keys, " " k " ")) { v = $2; gsub(/["\\]/, "", v); printf "%s\"%s\":\"%s\"", (n++ ? "," : ""), k, v } } END { printf "}" }' "$f" 2>/dev/null || printf '{}'
 }
 jarr() { printf '[%s]' "$(echo $1 | tr ' ' ',')"; }
+# Ход диагностики; если процесса уже нет или он молчит дольше 2 минут — «error:stuck», чтобы панель не ждала вечно.
+# Diagnostics progress; when the process is gone or silent for over 2 minutes — error:stuck, so the panel never waits forever.
+diag_status() {
+  rdv _ds "$D/diag.status"
+  case "$_ds" in [0-9]*/*)
+    rdv _dp "$D/diag.pid"
+    { [ -n "$_dp" ] && kill -0 "$_dp" 2>/dev/null && [ -n "$(find "$D/diag.status" -mmin -2 2>/dev/null)" ]; } || _ds="error:stuck" ;;
+  esac
+  echo "$_ds"
+}
+# Остановить процесс и его потомков: сначала вежливо, через 2 с — силой. / stop a process tree: politely, then by force.
+kill_tree() {
+  [ -n "$1" ] && kill -0 "$1" 2>/dev/null || return 0
+  _kids=$(pgrep -P "$1" 2>/dev/null); kill "$1" $_kids 2>/dev/null
+  _i=0; while kill -0 "$1" 2>/dev/null && [ $_i -lt 8 ]; do sleep 0.25; _i=$((_i + 1)); done
+  kill -9 "$1" $_kids 2>/dev/null; true
+}
+diag_stop() { rdv _dp "$D/diag.pid"; kill_tree "$_dp"; rm -f "$D/diag.pid" "$D/diag.tmp" "$D"/diag.tmp.*; { echo davinci_control_diag > $R/sys/power/wake_unlock; } 2>/dev/null; true; }
 jcommon() {
   [ -n "$(daemon_pid)" ] && dm=true || dm=false
   [ -f "$D/full" ] && full=true || full=false
@@ -81,7 +99,7 @@ jcommon() {
     "$(juev $B/uevent HEALTH CHARGE_TYPE DIE_HEALTH INPUT_CURRENT_LIMITED VOLTAGE_MAX)"
   printf '"bl":{"raw":%s,"max":%s},' "$(jnum "$(backlight)")" "$(jnum "$(backlight_max)")"
   printf '"cc":{"node":"%s","tbl":"%s","fb":%s,"smart":%s,"lvl":%s,"max":%s,"ok":%s,"own":%s,"uev":%s,"reg":%s},' "$CCLN" "$(stv tbl)" "$(jnum "$(stv fb)")" "${CC_SMART:-1}" "$(jnum "$(rd "$CCL")")" "$(jnum "$(rd "$CCLMAX")")" "$(jnum "$(stv ccok)")" "$(jnum "$(stv cc)")" $u "$(jnum "$(stv reg)")"
-  printf '"diag":%s' "$(jstr "$(rd "$D/diag.status")")"
+  printf '"diag":%s' "$(jstr "$(diag_status)")"
 }
 jhist() {
   [ -f "$HIST" ] || { printf '[]'; return; }
@@ -127,6 +145,7 @@ logs() {
   report
   echo; echo "-- config"; grep -v '^#' "$CONF" 2>/dev/null
   echo; echo "-- $(t r_events)"; render_log "$LOG"
+  [ -f "$D/restart.dump" ] && { echo; echo "-- last manual restart: module processes before it"; cat "$D/restart.dump"; }
   echo; echo "-- sessions (start,end,from%,to%,avg mA,max temp×10,charger,max W,mode,screen on %,JEITA lag s)"; cat "$SESS" 2>/dev/null
   echo; echo "-- drain (end,seconds,−%,mAh,deep sleep %,mobile MB,mobile share %,SIMs)"; cat "$DRAIN" 2>/dev/null
   echo; echo "-- history (time,%,temp×10,status,mA,charging,screen,cable,0.01%), last 60"; tail -n 60 "$HIST" 2>/dev/null
@@ -151,12 +170,28 @@ case "$cmd" in
     PANEL_HOST=$1; mkdir -p "$OUT"; f=$(outname log)
     logs > "$f" && { ev log_saved "${f#"$R"}"; echo "${f#"$R"}"; } ;;
   diag)
-    case "$(rd "$D/diag.status")" in [0-9]*/*)
-      [ -n "$(find "$D/diag.status" -mmin -3 2>/dev/null)" ] && { echo busy; exit 0; } ;; esac
+    case "$(diag_status)" in [0-9]*/*) echo busy; exit 0 ;; esac
+    diag_stop   # зависший прошлый запуск / a stuck earlier run
     put "$D/diag.status" "0/12 $(date +%s)"
     # отдельный сеанс: не умирает вместе с оболочкой панели / own session: survives the panel shell
-    PANEL_HOST=$1 setsid nohup sh "$MODDIR/diag.sh" >/dev/null 2>&1 </dev/null &
+    PANEL_HOST=$1 setsid sh "$MODDIR/diag.sh" >/dev/null 2>&1 </dev/null &
     echo started ;;
+  restart)
+    # Перезапуск службы и диагностики. Настройки, журнал, история и текущий сеанс зарядки сохраняются.
+    # Сначала снимок процессов: по нему видно, что зависло и где.
+    # Restart the service and diagnostics. Settings, log, history and the current charging session are kept.
+    # A process snapshot is taken first: it shows what hung and where.
+    proc_dump > "$D/restart.dump" 2>&1
+    case "$(rd "$D/diag.status")" in [0-9]*/*) put "$D/diag.status" "error:stopped" ;; esac
+    diag_stop
+    rdv _sp "$D/sup.pid"; [ -n "$_sp" ] && kill -9 "$_sp" 2>/dev/null   # сторож первым, иначе он поднимет службу сам / the supervisor first
+    rdv _p "$D/pid"; kill_tree "$_p"                                        # служба по TERM сохраняет сеанс / the service saves the session on TERM
+    rdv _up "$D/uev.pid"; [ -n "$_up" ] && kill "$_up" 2>/dev/null
+    rm -f "$D/pid" "$D/uev.pid" "$D/sup.pid"
+    failsafe
+    ev restart_user
+    setsid sh "$MODDIR/service.sh" restart >/dev/null 2>&1 </dev/null &
+    echo restarted ;;
   changelog) cat "$MODDIR/changelog.tsv" ;;
   full)
     mkdir -p "$D"
@@ -212,5 +247,5 @@ case "$cmd" in
     a=$(for x in $ACK; do [ "$x" != "$id" ] && echo "$x"; done | tr '\n' ' ')
     [ "${1#-}" = "$1" ] && a="$a $id"
     a=$(echo $a); setc ACK "\"$a\"" ;;
-  *) echo "panel json live strings events logs savelogs diag changelog full [off] limit N hot N little N big N profile perf|balance|eco chgmode care|fast thermalchg 0|1 brightcharge 0|1 autobatt 0|1 saver 0|1 usbfast 0|1 drainalert 0|1 fullby HH:MM|off applog 0|1 notify 0|1 lang auto|ru|en skin blue|red|black ack [-]ID" ;;
+  *) echo "panel json live strings events logs savelogs diag restart changelog full [off] limit N hot N little N big N profile perf|balance|eco chgmode care|fast thermalchg 0|1 brightcharge 0|1 autobatt 0|1 saver 0|1 usbfast 0|1 drainalert 0|1 fullby HH:MM|off applog 0|1 notify 0|1 lang auto|ru|en skin blue|red|black ack [-]ID" ;;
 esac

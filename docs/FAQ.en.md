@@ -147,6 +147,13 @@ Turn on “Charge to 100% by a set time” in the Charging card and pick the hou
 </details>
 
 <details>
+<summary><b>The panel or diagnostics hang. What do I do?</b></summary>
+
+Tap “Restart the module” in Log and diagnostics. The service and diagnostics stop and start again, no phone reboot needed. Settings, the log and statistics are kept. The module records what exactly hung — attach the log to your bug report.
+
+</details>
+
+<details>
 <summary><b>Notifications do not arrive</b></summary>
 
 They are off by default: turn on Notifications in the Panel card — a test one arrives at once. Notifications come from the system app Shell; if the test one does not show, allow notifications for it in Android settings.

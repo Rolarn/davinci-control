@@ -115,10 +115,17 @@ ev() {
 # render_log ФАЙЛ [N] — журнал текстом на языке интерфейса. / log as text in the UI language.
 render_log() {
   [ -f "$1" ] || return 0
-  tail -n "${2:-100000}" "$1" | awk -F'\t' -v l="$(ui_lang)" -v str="$STR" '
+  # Время считаем сами: у awk в Android нет strftime. / the time is computed by hand: Android's awk has no strftime.
+  _z=$(date +%z); _zs=$(( (1${_z#[+-]} - 10000) / 100 * 3600 + (1${_z#[+-]} - 10000) % 100 * 60 )); case "$_z" in -*) _zs=$((-_zs)) ;; esac
+  tail -n "${2:-100000}" "$1" | awk -F'\t' -v l="$(ui_lang)" -v str="$STR" -v off="$_zs" '
+    function fmt(e,   d, s, z, era, doe, yoe, doy, mp) {
+      e += off; d = int(e / 86400); s = e - d * 86400; z = d + 719468; era = int(z / 146097); doe = z - era * 146097
+      yoe = int((doe - int(doe / 1460) + int(doe / 36524) - int(doe / 146096)) / 365); doy = doe - (365 * yoe + int(yoe / 4) - int(yoe / 100)); mp = int((5 * doy + 2) / 153)
+      return sprintf("%02d.%02d %02d:%02d:%02d", doy - int((153 * mp + 2) / 5) + 1, (mp < 10 ? mp + 3 : mp - 9), int(s / 3600), int(s % 3600 / 60), s % 60)
+    }
     BEGIN { while ((getline line < str) > 0) { split(line, p, "\t"); m[p[1]] = (l == "en" ? p[3] : p[2]) } }
     { s = ($2 in m) ? m[$2] : $2; for (i = 3; i <= NF; i++) { v = $i; gsub(/&/, "\\\\&", v); gsub("\\{" (i - 2) "\\}", v, s) }
-      printf "%s %s\n", strftime("%d.%m %H:%M:%S", $1), s }'
+      printf "%s %s\n", fmt($1), s }'
 }
 
 # ---------- root-менеджер / root manager ----------
@@ -239,6 +246,18 @@ notify() {  # тег заголовок текст / tag title text
 }
 PKGL=$R/data/system/packages.list
 daemon_pid() { p=$(rd $D/pid); [ -n "$p" ] && kill -0 "$p" 2>/dev/null && echo "$p"; }
+# Процессы модуля: кто жив, в каком состоянии и где в ядре ждёт. Нужен, чтобы понять причину зависания.
+# Module processes: which are alive, their state and where in the kernel they wait — to find why something hung.
+proc_dump() {
+  echo "time: $(date '+%Y-%m-%d %H:%M:%S') · diag.status: $(rd "$D/diag.status")"
+  _own=""; for _f in sup.pid pid uev.pid diag.pid; do rdv _p "$D/$_f"; [ -n "$_p" ] && _own="$_own $_p"; done
+  for _p in $_own $(grep -l davinci-control $R/proc/[0-9]*/cmdline 2>/dev/null | sed 's|.*/proc/||; s|/cmdline||'); do
+    [ "$_p" = "$$" ] && continue; [ -d "$R/proc/$_p" ] || continue
+    case " $_seen " in *" $_p "*) continue ;; esac; _seen="$_seen $_p"
+    printf 'pid %s · %s· %s · wchan=%s\n' "$_p" "$(tr '\0' ' ' < "$R/proc/$_p/cmdline" 2>/dev/null | cut -c1-120)" "$(grep -m1 '^State' "$R/proc/$_p/status" 2>/dev/null | tr -s '\t ' ' ')" "$(cat "$R/proc/$_p/wchan" 2>/dev/null)"
+    head -n 8 "$R/proc/$_p/stack" 2>/dev/null | sed 's/^/    /'
+  done
+}
 wake_daemon() { p=$(daemon_pid); [ -n "$p" ] && pkill -P "$p" sleep 2>/dev/null; true; }
 
 # Файлы нагрева прошивки: подменяем, только если все совпадают с проверенными байт в байт.

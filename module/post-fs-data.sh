@@ -11,6 +11,8 @@ use=0
 if [ "$THERMAL_CHG" = 0 ]; then
   if thermal_match; then use=1; else touch "$D/thermal.mismatch"; fi
 fi
+# что решили при загрузке: служба сверит с тем, что получилось на деле / the boot-time decision, checked later by the service
+echo $use > "$D/thermal.boot"
 for f in "$MODDIR"/thermal/thermal-*.conf; do
   n=${f##*/}
   if [ $use = 1 ]; then

@@ -52,7 +52,7 @@ It sits by the charging connector and the protection board. On fast charging it 
 
 The ROM (thermal-engine) cuts charging current when the body warms up, from about 34 °C, using tables in `/vendor/etc/thermal-*.conf`. The module carries its own copies of these files where the list of levels in the charging rule is zeroed and everything else (CPU frequencies on heat) is as in the ROM.
 
-The copies are mounted only if **all six stock files match the tested ones byte for byte** — their SHA-256 sums are in `module/thermal/orig.sha256`. If even one differs, the module leaves them alone and the panel says “left as is”. This way the module cannot break a ROM it does not know. The panel switch changes after a reboot.
+The copies are mounted only if **all six stock files match the tested ones byte for byte** — their SHA-256 sums are in `module/thermal/orig.sha256`. If even one differs, the module leaves them alone and the panel says “left as is”. This way the module cannot break a ROM it does not know. The panel switch applies after a reboot; the text under it says what is in effect now — checked against the files the system really sees.
 
 On KernelSU file replacement works only with a metamodule (e.g. meta-overlayfs). Without it the panel says the files were not mounted.
 
@@ -73,7 +73,11 @@ The “Drain by hour” chart is built from the history the service writes every
 
 ## Diagnostics
 
-The report takes about a minute. Every system command is limited to 10 seconds, and the file records how long each step took. `/sys/power/wakeup_count` is deliberately not read: reading it waits until no wakeup source is active and can hang for minutes.
+The report takes about a minute. Each of the 12 steps runs in its own supervised process: if a kernel read never answers (such a read cannot be interrupted even by a signal), the step is abandoned, the file keeps a note of where it stopped, and collection goes on. System commands are limited to 10 seconds, and the file records how long each step took. If the diagnostics process is gone, the panel sees it and lets you start again. `/sys/power/wakeup_count` is deliberately not read: reading it waits until no wakeup source is active and can hang for minutes.
+
+## Restarting the module
+
+The “Restart the module” button (or `tune.sh restart`) stops the supervisor, the service and diagnostics and starts the service again without rebooting the phone. Before that a snapshot of the module's processes is recorded: the state of each and the place in the kernel where it waits — the snapshot goes into the log and diagnostics. Settings, the log, history and the current charging session are kept; during the restart charging is on and the current limit is lifted.
 
 ## Notifications and the app log
 

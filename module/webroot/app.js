@@ -154,8 +154,7 @@ lim.addEventListener('change', () => { const v = +lim.value; apply('lim', 'limit
 $('full').addEventListener('click', () => { const on = !(data && data.charge.full); apply('full', on ? 'full' : 'full off', on, d => d.charge.full === on, $('fullConf')); });
 for (const [id, cmd, key] of [['brC', 'brightcharge', 'bright'], ['brA', 'autobatt', 'autoBatt'], ['brS', 'saver', 'saverBatt'], ['thC', 'thermalchg', 'thermalChg'], ['usb', 'usbfast', 'usbFast'], ['alert', 'drainalert', 'drainAlert'], ['appLog', 'applog', 'appLog'], ['ntf', 'notify', 'notify']]) {
   $(id).addEventListener('change', e => {
-    let v = e.target.checked ? 1 : 0;
-    if (id === 'thC') v = 1 - v;   // переключатель «выключить заводское» / the switch means “turn stock off”
+    const v = e.target.checked ? 1 : 0;
     apply(id, cmd + ' ' + v, v, d => d.conf[key] === v, $(id + 'Conf') || $('limConf'));
   });
 }
@@ -213,6 +212,16 @@ async function showChangelog() {
 $('whatsnew').addEventListener('click', showChangelog);
 $('diagBtn').addEventListener('click', async () => {
   try { const r = (await sh(`sh ${T} diag '${host()}'`)).stdout.trim(); toast(r === 'busy' ? t('diag_busy') : t('diag_started')); inflight = 0; await load(true); diagTick(); } catch (e) { toast(t('error', e.message)); }
+});
+// Перезапуск модуля: служба и диагностика останавливаются и запускаются заново. / restart the service and diagnostics.
+$('restartBtn').addEventListener('click', async () => {
+  const b = $('restartBtn'), c = $('rsConf'); b.disabled = true; setConf(c, 'wait wrap', t('restart_run'));
+  try {
+    await sh(`sh ${T} restart`);
+    await new Promise(r => setTimeout(r, 4000)); inflight = 0; await load(true);
+    if (data && data.daemon) setConf(c, 'ok wrap', '✓ ' + t('restart_ok')); else setConf(c, 'bad wrap', '✗ ' + t('restart_bad'));
+  } catch (e) { setConf(c, 'bad wrap', '✗ ' + t('error', e.message)); }
+  b.disabled = false;
 });
 
 const pop = $('pop'), popA = $('popA');
@@ -503,11 +512,12 @@ function render(d) {
   $('fbHint').textContent = !fbv ? t('fb_off') : cf.limit >= 100 ? t('fb_nolimit') : cc.fb === 1 && c.plugged ? t('fb_go', fbv) : t('fb_wait', cf.limit, fbv);
   // файлы нагрева / thermal configs
   const th = d.ok.thermal || 'stock', want = pend('thC') ?? cf.thermalChg;
-  $('thC').checked = want === 0;
+  // переключатель включён = заводское снижение работает; текст — что действует сейчас и что будет после перезагрузки
+  // switch on = stock reduction works; the text says what is in effect now and what changes after a reboot
+  $('thC').checked = want === 1 || th === 'mismatch';
   $('thC').disabled = th === 'mismatch';
-  let ts = t('th_' + (th === 'module' || th === 'stock' || th === 'mismatch' || th === 'nomount' ? th : 'stock'));
-  if ((want === 1 && th === 'module') || (want === 0 && th === 'stock')) ts += ' · ' + t('th_reboot');
-  $('thState').textContent = ts;
+  $('thState').textContent = t('th_' + (th === 'module' || th === 'mismatch' || th === 'nomount' ? th : 'stock'));
+  $('thNext').textContent = want === 0 && th === 'stock' ? t('th_will_off') : want === 1 && (th === 'module' || th === 'nomount') ? t('th_will_on') : '';
   if (c.ffc == null) $('usbCtl').style.display = 'none'; else $('usb').checked = (pend('usb') ?? cf.usbFast) === 1;
   // сеансы / sessions
   items($('sess'), (d.sessions || []).slice(-6).reverse().map(l => {
@@ -589,7 +599,7 @@ function renderDiag(s, now) {
     clearInterval(diagT); diagT = null;
     $('dProgW').style.display = 'none'; btn.disabled = false; btn.textContent = t('diag');
     if (s.startsWith('done:')) setConf($('dStat'), 'ok wrap', '✓ ' + t('diag_done', s.slice(5).replace('/sdcard/', '')));
-    else if (s.startsWith('error:')) setConf($('dStat'), 'bad wrap', '✗ ' + s.slice(6));
+    else if (s.startsWith('error:')) { const k = 'de_' + s.slice(6), x = t(k); setConf($('dStat'), 'bad wrap', '✗ ' + (x === k ? s.slice(6) : x)); }
   }
 }
 // раз в секунду — время, раз в 2 с — свежий шаг / every second the timer, every 2 s a fresh step

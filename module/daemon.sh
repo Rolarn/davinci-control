@@ -54,7 +54,7 @@ cc_set() {  # $1 = ступень / level (0 = без ограничения / n
   v=$1; [ "$v" -gt $CC_CAP ] && v=$CC_CAP
   rdv cur "$CCL"
   # заводская термозащита включена — её ступень не ослабляем / stock thermal on: never weaken its level
-  [ "$THERMAL_CHG" = 1 ] && [ "${cur:-0}" -gt "$v" ] && [ "$cur" != "$cc_cur" ] && return 0
+  [ "$TH" != module ] && [ "${cur:-0}" -gt "$v" ] && [ "$cur" != "$cc_cur" ] && return 0
   if [ "$cur" != "$v" ]; then
     [ "$v" = "$cc_cur" ] && [ $cc_ovr = 0 ] && { ev cc_other "$v" "$cur"; cc_ovr=1; }
     echo "$v" > "$CCL" 2>/dev/null
@@ -90,11 +90,13 @@ trap 'stop_all; exit 0' TERM INT HUP
 if uev_start; then ev uev_on; else ev uev_off; fi
 
 # ---------- файлы нагрева / thermal configs: module | stock | mismatch | nomount ----------
+# Состояние — то, что действует на деле с загрузки, а не то, что выбрано в настройках (настройка применяется после перезагрузки).
+# The state is what has really been in effect since boot, not the setting (which applies after a reboot).
 th_state() {
-  if [ "$THERMAL_CHG" = 1 ]; then echo stock
+  if [ "$(sha256sum "$R/vendor/etc/thermal-normal.conf" 2>/dev/null | cut -d' ' -f1)" = "$(sha256sum "$MODDIR/thermal/thermal-normal.conf" 2>/dev/null | cut -d' ' -f1)" ]; then echo module
   elif [ -f "$D/thermal.mismatch" ]; then echo mismatch
-  elif [ "$(sha256sum "$R/vendor/etc/thermal-normal.conf" 2>/dev/null | cut -d' ' -f1)" = "$(sha256sum "$MODDIR/thermal/thermal-normal.conf" 2>/dev/null | cut -d' ' -f1)" ]; then echo module
-  else echo nomount; fi
+  elif [ "$(rd "$D/thermal.boot")" = 1 ]; then echo nomount
+  else echo stock; fi
 }
 TH=$(th_state); put "$D/thermal.state" "$TH"
 case $TH in module) ev thermal_off ;; mismatch) ev thermal_mismatch ;; nomount) ev thermal_nomount ;; esac

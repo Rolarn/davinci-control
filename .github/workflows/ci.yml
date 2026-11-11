@@ -16,7 +16,7 @@ jobs:
         with: { fetch-depth: 0 }
       - name: Tools
         run: |
-          sudo apt-get update -qq && sudo apt-get install -y -qq busybox shellcheck zip
+          sudo apt-get update -qq && sudo apt-get install -y -qq busybox shellcheck zip original-awk
           npm install --no-save playwright@1.49.1
           npx playwright install --with-deps chromium
       - name: Tests

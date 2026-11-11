@@ -41,7 +41,12 @@ let bad = 0; const fail = m => { console.log('  ✗ ' + m); bad++; }, ok = m => 
       typ: document.getElementById('lgOn').textContent + ' | ' + document.getElementById('lgOff').textContent,
       fb: document.getElementById('fbOn').checked && document.getElementById('fbTime').value === '07:00', fbHint: document.getElementById('fbHint').textContent,
       off: !document.getElementById('appLog').checked && !document.getElementById('ntf').checked,
-      limits: document.getElementById('chgRows').textContent }));
+      limits: document.getElementById('chgRows').textContent,
+      cut: [...document.querySelectorAll('.box .l, .box .s, .box .n')].filter(e => e.scrollWidth > e.clientWidth + 1).map(e => e.textContent),
+      th: [document.getElementById('thC').checked, document.getElementById('thState').textContent, document.getElementById('thNext').textContent] }));
+    if (!st.cut.length) ok(`${tag}: подписи в плитках помещаются целиком / box labels fit`); else fail(`${tag}: обрезаны подписи / cut labels: ${st.cut.join(' | ')}`);
+    // стенд: файлы модуля действуют, в настройках — отключено / bench: module configs in effect, setting says off
+    if (st.th[0] === false && st.th[1] && st.th[2] === '') ok(`${tag}: заводское снижение: выключено и подписано / stock reduction: off and labelled`); else fail(`${tag}: заводское снижение / stock reduction ${JSON.stringify(st.th)}`);
     if (st.order === 'cNow cCharge cUse cPerf cBright cLog cPanel') ok(`${tag}: порядок блоков / card order`); else fail(`${tag}: порядок блоков / card order: ${st.order}`);
     if (st.ev > 0 && st.ev <= 10) ok(`${tag}: в журнале не больше 10 событий (${st.ev}) / at most 10 events`); else fail(`${tag}: событий в журнале ${st.ev}`);
     if (st.solid === 1 && st.dashed === 2 && /\d/.test(st.typ)) ok(`${tag}: график расхода: линия и два пунктира (${st.typ}) / drain chart`); else fail(`${tag}: график расхода / drain chart ${JSON.stringify(st)}`);
@@ -74,6 +79,10 @@ let bad = 0; const fail = m => { console.log('  ✗ ' + m); bad++; }, ok = m => 
       // зарядка к времени, диагностика / charge by time, diagnostics
       await p.evaluate(() => { const c = document.getElementById('fbOn'); c.checked = false; c.dispatchEvent(new Event('change')); }); await p.waitForTimeout(200);
       await p.evaluate(() => { const c = document.getElementById('ntf'); c.checked = true; c.dispatchEvent(new Event('change')); document.getElementById('diagBtn').click(); }); await p.waitForTimeout(300);
+      await p.evaluate(() => { const c = document.getElementById('thC'); c.checked = true; c.dispatchEvent(new Event('change')); document.getElementById('restartBtn').click(); }); await p.waitForTimeout(300);
+      const th2 = await p.evaluate(() => document.getElementById('thNext').textContent);
+      const c2 = await p.evaluate(() => window.__calls.map(c => c.split(' ').slice(2).join(' ')));
+      if (c2.includes('thermalchg 1') && th2 && c2.includes('restart')) ok(`${tag}: включили заводское снижение — «после перезагрузки»; перезапуск отправлен / stock on → after a reboot; restart sent`); else fail(`${tag}: переключатель нагрева или перезапуск / thermal switch or restart: ${th2} · ${c2.slice(-4).join(' | ')}`);
       const cmds = await p.evaluate(() => window.__calls.map(c => c.split(' ').slice(2).join(' ')));
       if (cmds.includes('fullby off') && cmds.includes('notify 1') && cmds.some(c => c.startsWith('diag '))) ok(`${tag}: команды «к времени», уведомлений и диагностики / commands sent`); else fail(`${tag}: команды не ушли / commands not sent: ${cmds.slice(-6).join(' | ')}`);
     }

@@ -39,6 +39,7 @@ saver_fail	Не удалось включить экономию заряда	Co
 saver_again	Экономию заряда кто-то выключил — включил снова	Battery Saver was turned off — turned it back on
 drain_alert	Расход во сне вырос: {1} мА за неделю против {2} мА раньше	Overnight drain went up: {1} mA this week vs {2} mA before
 daemon_restart	Служба остановилась неожиданно — перезапуск ({1})	Service stopped unexpectedly — restarting ({1})
+restart_user	Модуль перезапущен вручную	Module restarted by hand
 daemon_giveup	Служба падает снова и снова — больше не перезапускаю	Service keeps crashing — no more restarts
 diag_saved	Диагностика сохранена: {1}	Diagnostics saved: {1}
 log_saved	Журнал сохранён: {1}	Log saved: {1}
@@ -53,8 +54,8 @@ set_profile_balance	Настройка: профиль «Баланс»	Setting:
 set_profile_eco	Настройка: профиль «Экономия»	Setting: profile Economy
 set_mode_care	Настройка: режим зарядки «Бережно»	Setting: charging mode Care
 set_mode_fast	Настройка: режим зарядки «Быстро»	Setting: charging mode Fast
-set_thermal_0	Настройка: заводское снижение тока выключить (после перезагрузки)	Setting: turn stock current reduction off (after reboot)
-set_thermal_1	Настройка: заводское снижение тока вернуть (после перезагрузки)	Setting: restore stock current reduction (after reboot)
+set_thermal_0	Настройка: заводское снижение тока при нагреве корпуса — отключить (после перезагрузки)	Setting: stock current reduction on body heat — turn off (after a reboot)
+set_thermal_1	Настройка: заводское снижение тока при нагреве корпуса — включить (после перезагрузки)	Setting: stock current reduction on body heat — turn on (after a reboot)
 set_brightcharge_1	Настройка: яркость 100% на зарядке	Setting: 100% brightness while charging
 set_brightcharge_0	Настройка: яркость на зарядке не трогать	Setting: leave brightness alone while charging
 set_autobatt_1	Настройка: автояркость без кабеля	Setting: auto brightness on battery
