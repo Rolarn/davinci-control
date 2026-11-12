@@ -55,7 +55,7 @@
         <div class="seg" id="hot"></div><div class="conf" id="hotConf"></div></div>
       <div class="ctl"><div class="btnrow"><button class="btn" id="full" type="button"></button><button class="q" data-help="h_full"></button></div><div class="conf" id="fullConf"></div></div>
       <div class="ctl"><div class="lab"><span data-t="fullby"></span><button class="q" data-help="h_fullby"></button></div>
-        <div class="switch"><div class="fbrow"><input type="time" id="fbTime" value="07:00" data-label="fullby"><span class="hint" id="fbHint"></span></div><label class="tg"><input type="checkbox" id="fbOn" data-label="fullby"><i></i></label></div>
+        <div class="switch"><div class="fbrow"><span class="tsel"><select id="fbH" data-label="fb_h"></select><b>:</b><select id="fbM" data-label="fb_m"></select></span><span class="hint" id="fbHint"></span></div><label class="tg"><input type="checkbox" id="fbOn" data-label="fullby"><i></i></label></div>
         <div class="conf" id="fbConf"></div></div>
       <div class="ctl"><div class="lab"><span data-t="thermal"></span><button class="q" data-help="h_thermal"></button></div>
         <div class="switch"><div><span class="hint" id="thState"></span><span class="hint next" id="thNext"></span></div><label class="tg"><input type="checkbox" id="thC" data-label="thermal"><i></i></label></div>
@@ -146,7 +146,7 @@
         <div class="hint" data-t="diag_hint"></div></div>
       <div class="ctl"><button class="btn sec" id="saveLog" type="button" data-t="savelog"></button>
         <div class="hint" data-t="savelog_hint"></div></div>
-      <div class="ctl"><button class="btn sec" id="restartBtn" type="button" data-t="restart"></button>
+      <div class="ctl"><div class="btnq"><button class="btn sec" id="restartBtn" type="button" data-t="restart"></button><button class="q" data-help="h_restart"></button></div>
         <div class="conf wrap" id="rsConf"></div>
         <div class="hint" data-t="restart_hint"></div></div>
       <div class="ctl"><div class="switch"><div><b data-t="applog"></b><span class="hint" data-t="applog_s"></span></div>

@@ -29,7 +29,8 @@ LIM=${DIAG_LIM:-10}   # DIAG_LIM, DIAG_STEP и SLEEP_CMD — только для
 # Внешняя команда — не дольше 10 с. / an external command — at most 10 s.
 lim() { timeout "$LIM" "$@" 2>/dev/null; }
 h() { printf '\n===== %s =====\n' "$*"; }
-kv() { for f in "$@"; do [ -r "$f" ] && printf '%s = %s\n' "${f#"$R"}" "$(tr '\n' ' ' < "$f" 2>/dev/null | cut -c1-500)"; done; }
+# имя печатаем до чтения: если узел не ответит, в файле видно, какой / the name is printed before the read
+kv() { for f in "$@"; do [ -r "$f" ] && { printf '%s = ' "${f#"$R"}"; timeout 3 head -c 500 "$f" 2>/dev/null | tr '\n' ' '; echo; }; done; }
 dump_dir() { for f in "$1"/*; do [ -f "$f" ] && [ -r "$f" ] && printf '%s = %s\n' "${f##*/}" "$(head -c 400 "$f" 2>/dev/null | tr '\n' ' ')"; done; }
 # Маскировка личных данных / masking personal data
 mask() {

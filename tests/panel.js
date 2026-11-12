@@ -39,7 +39,7 @@ let bad = 0; const fail = m => { console.log('  ✗ ' + m); bad++; }, ok = m => 
       ev: document.querySelectorAll('#events li').length,
       solid: document.querySelectorAll('#gDrain path').length, dashed: document.querySelectorAll('#gDrain line[stroke-dasharray]').length,
       typ: document.getElementById('lgOn').textContent + ' | ' + document.getElementById('lgOff').textContent,
-      fb: document.getElementById('fbOn').checked && document.getElementById('fbTime').value === '07:00', fbHint: document.getElementById('fbHint').textContent,
+      fb: document.getElementById('fbOn').checked && document.getElementById('fbH').value + ':' + document.getElementById('fbM').value === '07:00', fbHint: document.getElementById('fbHint').textContent,
       off: !document.getElementById('appLog').checked && !document.getElementById('ntf').checked,
       limits: document.getElementById('chgRows').textContent,
       cut: [...document.querySelectorAll('.box .l, .box .s, .box .n')].filter(e => e.scrollWidth > e.clientWidth + 1).map(e => e.textContent),

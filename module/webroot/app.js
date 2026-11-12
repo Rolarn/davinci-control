@@ -159,7 +159,16 @@ for (const [id, cmd, key] of [['brC', 'brightcharge', 'bright'], ['brA', 'autoba
   });
 }
 // зарядить к времени / charge by time
-const fbT = $('fbTime'), fbOn = $('fbOn');
+// время — два списка (часы и минуты по 5): родное поле времени в WebView показывает AM/PM по языку системы
+// time is two lists (hours, minutes by 5): the native time field shows AM/PM depending on the system language
+const fbH = $('fbH'), fbM = $('fbM'), fbOn = $('fbOn'), p2 = n => String(n).padStart(2, '0');
+for (let i = 0; i < 24; i++) fbH.add(new Option(p2(i), p2(i)));
+for (let i = 0; i < 60; i += 5) fbM.add(new Option(p2(i), p2(i)));
+const fbT = {
+  get value() { return fbH.value + ':' + fbM.value; },
+  set value(v) { const [h, m] = v.split(':'); if (![...fbM.options].some(o => o.value === m)) fbM.add(new Option(m, m)); fbH.value = h; fbM.value = m; },
+};
+fbT.value = '07:00';
 try { const v = localStorage.getItem('dc.fb'); if (/^([01]\d|2[0-3]):[0-5]\d$/.test(v || '')) fbT.value = v; } catch (e) { /* нет хранилища / no storage */ }
 function fbApply() {
   const v = /^([01]\d|2[0-3]):[0-5]\d$/.test(fbT.value) ? fbT.value : '07:00', want = fbOn.checked ? v : '';
@@ -167,7 +176,7 @@ function fbApply() {
   apply('fb', want ? 'fullby ' + v : 'fullby off', want, d => d.conf.fullBy === want, $('fbConf'));
 }
 fbOn.addEventListener('change', fbApply);
-fbT.addEventListener('change', () => { if (fbOn.checked) fbApply(); });
+for (const s of [fbH, fbM]) s.addEventListener('change', () => { if (fbOn.checked) fbApply(); });
 
 // ---------- окно и подсказки / sheet and help popovers ----------
 function openSheet(title, node, withBtns) {
@@ -337,6 +346,8 @@ $('headS').addEventListener('click', () => { if (probGo) goTo(probGo === 'proble
 
 // ---------- рисование / rendering ----------
 const mhz = k => Math.floor((k || 0) / 1000);
+// коротко, для пояснений: «13 ч», «7,5 ч», «3 дн.» / short form for notes
+const fmtS = h => !isFinite(h) || h <= 0 ? '—' : h >= 48 ? t('fmt_d', Math.round(h / 24)) : t('fmt_h', h >= 10 ? Math.round(h) : dec(h, 1));
 const fmtH = h => { if (!isFinite(h) || h <= 0) return '—'; if (h >= 48) return t('fmt_d', Math.round(h / 24)); const H = Math.floor(h), M = Math.round((h - H) * 60); return H ? t('fmt_hm', H, String(M).padStart(2, '0')) : t('fmt_m', M); };
 const tm = s => { const d = new Date(s * 1000); return d.toLocaleDateString(LANG === 'en' ? 'en-GB' : 'ru-RU', { day: '2-digit', month: '2-digit' }) + ' ' + d.toLocaleTimeString(LANG === 'en' ? 'en-GB' : 'ru-RU', { hour: '2-digit', minute: '2-digit' }); };
 function rates(h) {
@@ -392,9 +403,14 @@ function dist(el, rows) {
 function items(el, rows, empty) {
   el.innerHTML = '';
   if (!rows.length) { el.innerHTML = `<li class="empty"></li>`; el.firstChild.textContent = empty; return; }
-  for (const [when, text] of rows) {
+  for (const [when, text, sub] of rows) {
     const li = document.createElement('li'); const b = document.createElement('b'); b.textContent = when;
-    li.appendChild(b); li.appendChild(document.createTextNode(text)); el.appendChild(li);
+    if (sub == null) { li.appendChild(b); li.appendChild(document.createTextNode(text)); }
+    else {  // главное слева, время справа, подробности ниже / headline left, time right, details below
+      li.className = 'two'; const m = document.createElement('strong'), s = document.createElement('small'); m.textContent = text; s.textContent = sub;
+      li.append(m, b, s);
+    }
+    el.appendChild(li);
   }
 }
 // какую таблицу ядро берёт для этого блока (smblib_therm_charging) / which table the kernel uses for this charger
@@ -470,7 +486,7 @@ function render(d) {
   }
   const onR = rt.on.dt >= 1200 ? rt.on.drop * 3600 / rt.on.dt : null, offR = rt.off.dt >= 1200 ? rt.off.drop * 3600 / rt.off.dt : null;
   $('e2').textContent = onR ? fmtH(b.cap / onR) : '—';
-  $('e2s').textContent = offR ? t('standby', fmtH(b.cap / Math.max(offR, 0.1))) : t('collecting');
+  $('e2s').textContent = offR ? t('standby', fmtS(b.cap / Math.max(offR, 0.1))) : t('collecting');
   $('tB').textContent = deg(b.temp); tcls($('tB'), b.temp / 10, 40, 45);
   $('tQ').textContent = nw.tQuiet == null ? '—' : nw.tQuiet + '°'; tcls($('tQ'), nw.tQuiet, 45, 50);
   $('tC').textContent = nw.tCpu == null ? '—' : nw.tCpu + '°'; tcls($('tC'), nw.tCpu, 70, 80);
@@ -508,7 +524,7 @@ function render(d) {
   const fb = $('full'); fb.className = 'btn' + (full ? ' on' : ''); fb.textContent = full ? t('full_cancel') : t('full_once');
   // зарядить к времени / charge by time
   const fbv = pend('fb') ?? (cf.fullBy || '');
-  fbOn.checked = !!fbv; if (fbv && document.activeElement !== fbT) fbT.value = fbv;
+  fbOn.checked = !!fbv; if (fbv && document.activeElement !== fbH && document.activeElement !== fbM && fbT.value !== fbv) fbT.value = fbv;
   $('fbHint').textContent = !fbv ? t('fb_off') : cf.limit >= 100 ? t('fb_nolimit') : cc.fb === 1 && c.plugged ? t('fb_go', fbv) : t('fb_wait', cf.limit, fbv);
   // файлы нагрева / thermal configs
   const th = d.ok.thermal || 'stock', want = pend('thC') ?? cf.thermalChg;
@@ -524,12 +540,12 @@ function render(d) {
     const [s0, s1, c0, c1, ma, tmax, typ, pw, mode, scr, jl] = l.split(',');
     const dur = (s1 - s0) / 3600, rate = dur > 0 ? Math.round((c1 - c0) / dur) : 0;
     const chn = typ && typ !== '?' ? (I18N.en['ch_' + typ] ? t('ch_' + typ) : typ) + (+pw > 0 ? ', ' + pw + (LANG === 'en' ? ' W' : ' Вт') : '') : '';
-    return [tm(+s0), t('sess_line', c0, c1, fmtH(dur), rate, dec(ma / 1000, 1), dec(tmax / 10, 1), chn ? t('sess_ch', chn + ' · ' + t('mode_' + mode)) : ' · ' + t('mode_' + mode), +scr > 0 ? t('sess_scr', scr) : '', +jl > 0 ? t('sess_jl', jl) : '')];
+    return [tm(+s0), t('sess_main', c0, c1, fmtH(dur)), t('sess_sub', rate, dec(ma / 1000, 1), dec(tmax / 10, 1), chn ? t('sess_ch', chn + ' · ' + t('mode_' + mode)) : ' · ' + t('mode_' + mode), +scr > 0 ? t('sess_scr', scr) : '', +jl > 0 ? t('sess_jl', jl) : '')];
   }), t('sess_none'));
   // таблица тока / current table
   const dtx = dtFor(d), fcc = dtx ? dtx[1] : [];
   $('dtName').textContent = dtx ? t('dt_' + dtx[0]) : '';
-  $('dtTable').innerHTML = fcc.length ? '<div class="dtt">' + fcc.slice(0, 16).map((v, i) => `<div class="${cc.lvl === i ? 'cur' : ''}">${esc(t('dt_lvl', i))}<b>${v ? dec(v / 1e6, 1) + ' A' : '0'}</b></div>`).join('') + '</div>' : `<div class="empty">${t('dt_none')}</div>`;
+  $('dtTable').innerHTML = fcc.length ? '<div class="dtt">' + fcc.slice(0, 16).map((v, i) => `<div class="${cc.lvl === i ? 'cur' : ''}">${i}<b>${v ? dec(v / 1e6, 1) + ' A' : '0'}</b></div>`).join('') + '</div>' : `<div class="empty">${t('dt_none')}</div>`;
 
   // яркость / brightness
   const bl = d.bl || {};
@@ -552,7 +568,7 @@ function render(d) {
   if (d.dist) { dist($('dLittle'), d.dist.little); dist($('dBig'), d.dist.big); dist($('dGpu'), d.dist.gpu); }
 
   // расход / usage
-  const setR = (id, r, rr) => { $(id).textContent = rr ? t('pph', dec(rr, 1)) : '—'; $(id + 'S').textContent = rr ? t('drop_in', r.drop, fmtH(r.dt / 3600)) : t('collecting'); };
+  const setR = (id, r, rr) => { $(id).textContent = rr ? t('pph', dec(rr, 1)) : '—'; $(id + 'S').textContent = rr ? t('drop_in', r.drop, fmtS(r.dt / 3600)) : t('collecting'); };
   setR('rOn', rt.on, onR); setR('rOff', rt.off, offR);
   const oh = $('offHint'); oh.textContent = offR != null && offR > 2 ? t('off_hint', dec(offR, 1)) : ''; oh.hidden = !oh.textContent;
   const typ = d.typ || {}, ma = LANG === 'en' ? ' mA' : ' мА', dr = drainChart($('gDrain'), h, fullMah, typ, d.time);
@@ -567,8 +583,9 @@ function render(d) {
     $('hTemp').textContent = `${Math.min(...temps).toFixed(0)}–${Math.max(...temps).toFixed(0)}°`;
   } else { $('hCap').textContent = t('every5'); $('hTemp').textContent = ''; }
   const nights = (d.drain || []).map(l => l.split(',').map(Number));
-  items($('drain'), nights.slice(-8).reverse().map(([end, dur, drop, mah, deep, mob, share, sims]) => [tm(end), t('night_line', '', fmtH(dur / 3600), drop, dec(drop * 3600 / dur, 1), mah > 0 ? t('night_ma', Math.round(mah * 3600 / dur)) : '', deep,
-    share >= 0 ? t('night_mob', share) : '', sims >= 0 ? t('night_sim', sims) : '').replace(/^ · /, '')]), t('night_none'));
+  items($('drain'), nights.slice(-8).reverse().map(([end, dur, drop, mah, deep, mob, share, sims]) => [tm(end),
+    t('night_main', drop, fmtH(dur / 3600), mah > 0 ? t('night_ma', Math.round(mah * 3600 / dur)) : ''),
+    t('night_sub', dec(drop * 3600 / dur, 1), deep, share >= 0 ? t('night_mob', share) : '', sims >= 0 ? t('night_sim', sims) : '')]), t('night_none'));
   // по неделям / by week
   const wk = {}; nights.forEach(([end, dur, , mah]) => { if (mah > 0) { const w = Math.floor((d.time - end) / 604800); if (w < 6) { (wk[w] = wk[w] || []).push(mah * 3600 / dur); } } });
   const wl = [5, 4, 3, 2, 1, 0].map(w => [w, wk[w] ? wk[w].reduce((a, x) => a + x, 0) / wk[w].length : null]);
