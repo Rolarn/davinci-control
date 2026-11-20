@@ -35,7 +35,8 @@ dump_dir() { for f in "$1"/*; do [ -f "$f" ] && [ -r "$f" ] && printf '%s = %s\n
 # Маскировка личных данных / masking personal data
 mask() {
   sed -E 's/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/<email>/g
-          s/([0-9]{1,3}\.){3}[0-9]{1,3}/<ip>/g
+          s/(^|[^0-9A-Za-z.])([0-9]{1,3}\.){3}[0-9]{1,3}([^0-9A-Za-z.]|$)/\1<ip>\3/g
+          s/(^|[^0-9A-Za-z.])([0-9]{1,3}\.){3}[0-9]{1,3}([^0-9A-Za-z.]|$)/\1<ip>\3/g
           s/([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}/<mac>/g
           s/([0-9a-fA-F]{1,4}:){3,7}[0-9a-fA-F]{1,4}/<ip6>/g
           s/\+?[0-9]{11,20}/<num>/g'
@@ -140,7 +141,34 @@ s9() {
   h "suspend_control_internal"; lim dumpsys -t 8 suspend_control_internal | head -n 150
   h "deviceidle"; lim dumpsys -t 8 deviceidle | head -n 40
   echo "brightness: $(sget system screen_brightness) mode: $(sget system screen_brightness_mode) saver: $(sget global low_power)"
+  h "Battery Saver"
+  echo "on=$(sget global low_power) sticky=$(sget global low_power_sticky) schedule=$(sget global automatic_power_save_mode) at=$(sget global low_power_trigger_level)%"
+  echo "(sticky=1: Android turns Battery Saver back on by itself after every charge)"
+  h "Apps refused background work (system log)"
+  bg_apps
   echo "busybox: ${BB:-none} · uevent: $("$BB" --list 2>/dev/null | grep -qx uevent && echo yes || echo no)"
+}
+# Только приложения, которым система уже отказала в работе в фоне (по журналу Android), — не весь список.
+# Only apps the system has already refused background work (from the Android log) — not the full app list.
+bg_apps() {
+  _wl=$(lim dumpsys deviceidle whitelist)
+  lim logcat -d -b main,system -t 5000 -v brief | sed -n -E \
+    -e 's/.*not allowed due to bg restriction: service ([A-Za-z0-9_.]+)\/.*/\1/p' \
+    -e 's/.*Background started FGS: Disallowed \[callingPackage: ([A-Za-z0-9_.]+);.*/\1/p' \
+    -e 's/.*startForegroundService\(\) not allowed due to mAllowStartForeground false: service ([A-Za-z0-9_.]+)\/.*/\1/p' \
+    -e 's/.*Background start not allowed: service Intent .* cmp=([A-Za-z0-9_.]+)\/.*/\1/p' \
+    | sort | uniq -c | sort -rn | head -n 20 > "$TMP.bg"
+  if [ -s "$TMP.bg" ]; then
+    while read -r _n _p; do
+      _m=$(lim cmd appops get "$_p" RUN_ANY_IN_BACKGROUND | sed -n 's/.*RUN_ANY_IN_BACKGROUND: \([a-z]*\).*/\1/p' | head -n 1)
+      case "$_wl" in *",$_p,"*) _u=yes ;; *) _u=no ;; esac
+      echo "$_p · refused ×$_n · background usage: ${_m:-not set} · unrestricted: $_u · bucket: $(lim am get-standby-bucket "$_p")"
+    done < "$TMP.bg"
+  else echo "none"; fi
+  rm -f "$TMP.bg"
+  _q=$(timeout "$LIM" cmd appops query-op RUN_ANY_IN_BACKGROUND default 2>&1)
+  case "$_q" in *nknown*|*rror*|*xception*) _c="?" ;; "") _c=0 ;; *) _c=$(printf '%s\n' "$_q" | grep -c '^[A-Za-z]') ;; esac
+  echo "apps with background usage «default»: $_c (if one stops in the background: cmd appops set <app> RUN_ANY_IN_BACKGROUND allow)"
 }
 s10() { timeout $((LIM * 2)) dumpsys -t 18 batterystats --charged 2>/dev/null | head -n 2500; }
 s11() {

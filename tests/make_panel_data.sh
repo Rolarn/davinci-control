@@ -20,6 +20,8 @@ D=$R/data/adb/davinci-control; echo "CC_SMART=0" > $D/config; echo "HOT_PAUSE=48
 n0=1700000000
 for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14; do echo "$((n0 - i * 86400)),27000,$((3 + i % 3)),$((140 + i * 4)),9$((i % 9)),$((i * 3)),$((20 + i * 3)),2" ; done | sort -n > $D/drain.csv
 for i in 3 2 1; do echo "$((n0 - i * 86400 - 7200)),$((n0 - i * 86400)),$((30 + i)),80,2350,44$i,USB_HVDCP_3,17,fast,$((i * 20)),0" >> $D/sessions.csv; done
+# ночная зарядка: 100% через 1 ч 40 мин, потом ещё 6 ч на кабеле / overnight: full after 1 h 40 min, then 6 h on the cable
+echo "$((n0 - 30000)),$((n0 - 600)),20,100,1400,438,USB_HVDCP_3,17,fast,0,0,$((n0 - 24000))" >> $D/sessions.csv
 # сутки истории: днём экран (420–620 мА), ночью сон одним длинным шагом (по точному счётчику ≈ 40 мА), 7 дней для «обычного» уровня
 # a day of history: screen by day (420–620 mA), the night as one long sleep step (≈ 40 mA from the precise gauge), 7 days for the usual level
 awk -v n0=$n0 'BEGIN { raw = 9000; t = n0 - 7 * 86400

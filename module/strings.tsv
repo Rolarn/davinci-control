@@ -28,6 +28,7 @@ hold_off	Удержание снято — полный ток (датчик {1}
 jeita_lag	Ядро снизило ток выше 45° с задержкой {1} с	The kernel reduced current above 45° with a {1} s delay
 fullby_go	Заряжаю до 100% к {1} (сейчас {2}%)	Charging to 100% by {1} (now {2}%)
 sess	Сеанс зарядки: {1}→{2}% за {3} мин	Charging session: {1}→{2}% in {3} min
+sess_full	Сеанс зарядки: {1}→100% за {2} мин, потом ещё {3} мин на кабеле	Charging session: {1}→100% in {2} min, then {3} more min on the cable
 app_inst	Приложение установлено: {1}	App installed: {1}
 app_rem	Приложение удалено: {1}	App removed: {1}
 app_re	Приложение переустановлено: {1}	App reinstalled: {1}
@@ -61,7 +62,7 @@ set_brightcharge_0	Настройка: яркость на зарядке не �
 set_autobatt_1	Настройка: автояркость без кабеля	Setting: auto brightness on battery
 set_autobatt_0	Настройка: яркость без кабеля не трогать	Setting: leave brightness alone on battery
 set_saver_1	Настройка: экономия заряда без кабеля	Setting: Battery Saver on battery
-set_saver_0	Настройка: экономию заряда не включать	Setting: do not turn on Battery Saver
+set_saver_0	Настройка: экономия заряда выключена и больше не включается	Setting: Battery Saver turned off and no longer turned on
 set_usb_1	Настройка: быстрая зарядка от компьютера	Setting: fast charging from a computer
 set_usb_0	Настройка: обычная зарядка от компьютера	Setting: normal charging from a computer
 set_fullby	Настройка: зарядить до 100% к {1}	Setting: charge to 100% by {1}

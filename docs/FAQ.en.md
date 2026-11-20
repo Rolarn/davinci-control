@@ -154,6 +154,23 @@ Tap “Restart the module” in Log and diagnostics. The service and diagnostics
 </details>
 
 <details>
+<summary><b>A player or recorder stops as soon as I lock the screen</b></summary>
+
+Two common causes.
+
+1. **Android's Battery Saver.** While the screen is locked it stops apps working in the background: players, video and audio recording, picture-in-picture; widgets stop updating. If “Battery Saver on battery” is on in the Brightness and saver card, turn it off — the saver goes off at once. Before 1.0.0-rc.7 the module turned it on in a way that made Android turn it back on by itself after every charge; the new version clears that.
+2. **The app is not allowed to run in the background.** Even with “Unrestricted” in the battery settings, Android can refuse an app once the screen is locked. You can check and allow it in a root terminal (for example, Termux after `su`):
+
+```
+cmd appops get <package> RUN_ANY_IN_BACKGROUND
+cmd appops set <package> RUN_ANY_IN_BACKGROUND allow
+```
+
+If the first command shows `default` or `ignore`, the second allows background work — the same as “Allow background usage” in the app's settings. Which apps the system has already refused is shown in diagnostics, under “Apps refused background work”.
+
+</details>
+
+<details>
 <summary><b>Notifications do not arrive</b></summary>
 
 They are off by default: turn on Notifications in the Panel card — a test one arrives at once. Notifications come from the system app Shell; if the test one does not show, allow notifications for it in Android settings.

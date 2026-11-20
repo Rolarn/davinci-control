@@ -32,6 +32,8 @@ check "зарядка к времени, журнал приложений, ув
 check "пробное уведомление отправлено / test notification posted" "grep -q 'cmd notification post .*dc_test' $R/calls.log"
 tune fullby off >/dev/null
 check "зарядка к времени выключается / charge-by-time turns off" "grep -q '^FULL_BY=\$' $C"
+echo 1 > $R/lowpower; echo 1 > $R/sticky; tune saver 0 >/dev/null
+check "выключение экономии в панели выключает её сразу и снимает залипание / turning the switch off turns the saver off" "[ \$(cat $R/lowpower) = 0 ] && [ \$(cat $R/sticky) = 0 ] && grep -q '^SAVER_BATT=0' $C"
 check "события настроек / setting events" "grep -q 'set_mode_fast' $R/$D_/events.log && grep -q 'set_profile_eco' $R/$D_/events.log"
 
 echo "3. Сохранение журнала / saving the log"
@@ -43,7 +45,15 @@ check "журнал на английском / log in English" "grep -q 'Servic
 sed -i 's/^version=.*/version=v1.0.0-rc.3 (abc1234)/' $M/module.prop; P=$(tune savelogs x); sed -i 's/^version=.*/version=v1.0.0/' $M/module.prop
 check "тестовая сборка: имя без кода коммита / rc build: name without commit ($P)" "echo '$P' | grep -qE '/davinci-control_v1.0.0-rc.3_log_[0-9_-]+.txt$' && head -n 1 $R$P | grep -q 'v1.0.0-rc.3 (abc1234)'"
 echo "4. Диагностика и маскировка / diagnostics and masking"
-echo 'sync wakelock *sync*/com.google/user.name@gmail.com 192.168.1.20 aa:bb:cc:dd:ee:ff +79991234567' > $R/sys/class/backlight/panel0-backlight/leak
+echo 'sync wakelock *sync*/com.google/user.name@gmail.com 192.168.1.20 aa:bb:cc:dd:ee:ff +79991234567 Xiaomi/davinci:11/V12.5.3.0.RFJMIXM user,com.rec,10361' > $R/sys/class/backlight/panel0-backlight/leak
+# в журнале Android: два отказа одному приложению и обычный разрешённый запуск другому / two refusals for one app, one allowed start
+cat > $R/bin/logcat <<EOF
+#!/bin/sh
+echo "W/ActivityManager( 1596): Service.startForeground() not allowed due to bg restriction: service com.rec/com.rec.RecorderService"
+echo "W/ActivityManager( 1596): Service.startForeground() not allowed due to bg restriction: service com.rec/com.rec.RecorderService"
+echo "I/ActivityManager( 1596): Background started FGS: Allowed [callingPackage: com.ok; callingUid: 10001; uidState: TOP ]"
+EOF
+chmod +x $R/bin/logcat
 cat > $R/bin/dumpsys <<EOF
 #!/bin/sh
 cat $R/sys/class/backlight/panel0-backlight/leak
@@ -53,6 +63,9 @@ chmod +x $R/bin/dumpsys
 F=$(ls $R/sdcard/Download/davinci-control/*_diag_*.txt 2>/dev/null | head -n 1)
 check "файл диагностики создан / diagnostics file created" "[ -s '$F' ] && grep -q '^done:' $R/$D_/diag.status"
 check "почта, IP, MAC, номер скрыты / e-mail, IP, MAC, number masked" "! grep -qE 'gmail|192\\.168|aa:bb:cc|79991234567' '$F' && grep -q '<email>' '$F'"
+check "версия MIUI не принята за IP / a MIUI version is not taken for an IP" "grep -q 'V12.5.3.0.RFJMIXM' '$F'"
+check "экономия и её «залипание» в отчёте / saver and its sticky flag in the report" "grep -q '^on=0 sticky=' '$F'"
+check "в отчёте только приложения с отказом, с причиной / only refused apps, with details" "grep -q '^com.rec · refused ×2 · background usage: default · unrestricted: yes' '$F' && ! grep -q '^com.ok ·' '$F' && grep -q 'background usage «default»: 3' '$F'"
 check "SMB1390 и таблицы в диагностике / SMB1390 and tables" "grep -q 'charge_pump_master' '$F' && grep -q '^fcc=3500000' '$F' && grep -q '^qc3cp=3500000' '$F'"
 check "время шагов и общее / step and total timings" "[ \$(grep -c '^(step [0-9]* took' '$F') = 12 ] && grep -q 'total [0-9]* s' '$F'"
 # зависшая системная команда не задерживает отчёт / a stuck system command does not hold the report

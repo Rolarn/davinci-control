@@ -68,11 +68,17 @@ EOF
 #!/bin/bash
 echo "settings \$*" >> $R/calls.log
 case "\$1 \$2 \$3" in "get global low_power") cat $R/lowpower ;; "put global low_power") echo \$4 > $R/lowpower ;;
+  "get global low_power_sticky") cat $R/sticky 2>/dev/null || echo null ;; "put global low_power_sticky") echo \$4 > $R/sticky ;;
   "get system screen_brightness_mode") cat $R/brmode ;; "put system screen_brightness_mode") echo \$4 > $R/brmode ;; "get system screen_brightness") echo 255 ;; esac; true
 EOF
   cat > $R/bin/cmd <<EOF
 #!/bin/bash
-echo "cmd \$*" >> $R/calls.log; [ "\$1 \$2" = "power set-mode" ] && echo \$3 > $R/lowpower; true
+echo "cmd \$*" >> $R/calls.log
+# как Android: ручное включение экономии запоминается в low_power_sticky / like Android: a manual saver is sticky
+[ "\$1 \$2" = "power set-mode" ] && { echo \$3 > $R/lowpower; echo \$3 > $R/sticky; }
+[ "\$1 \$2" = "appops get" ] && echo "RUN_ANY_IN_BACKGROUND: default"
+[ "\$1 \$2" = "appops query-op" ] && printf 'com.a\ncom.b\ncom.c\n'
+true
 EOF
   cat > $R/bin/getprop <<EOF
 #!/bin/bash

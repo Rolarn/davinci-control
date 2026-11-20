@@ -537,10 +537,13 @@ function render(d) {
   if (c.ffc == null) $('usbCtl').style.display = 'none'; else $('usb').checked = (pend('usb') ?? cf.usbFast) === 1;
   // сеансы / sessions
   items($('sess'), (d.sessions || []).slice(-6).reverse().map(l => {
-    const [s0, s1, c0, c1, ma, tmax, typ, pw, mode, scr, jl] = l.split(',');
-    const dur = (s1 - s0) / 3600, rate = dur > 0 ? Math.round((c1 - c0) / dur) : 0;
+    const [s0, s1, c0, c1, ma, tmax, typ, pw, mode, scr, jl, full] = l.split(',');
+    // дошла до 100% — время и скорость до полного заряда, а остаток на кабеле отдельно
+    // reached 100%: time and rate to full, the rest on the cable shown separately
+    const end = +full > +s0 && +full < +s1 ? +full : +s1, cable = (s1 - end) / 3600;
+    const dur = (end - s0) / 3600, rate = dur > 0 ? Math.round((c1 - c0) / dur) : 0;
     const chn = typ && typ !== '?' ? (I18N.en['ch_' + typ] ? t('ch_' + typ) : typ) + (+pw > 0 ? ', ' + pw + (LANG === 'en' ? ' W' : ' Вт') : '') : '';
-    return [tm(+s0), t('sess_main', c0, c1, fmtH(dur)), t('sess_sub', rate, dec(ma / 1000, 1), dec(tmax / 10, 1), chn ? t('sess_ch', chn + ' · ' + t('mode_' + mode)) : ' · ' + t('mode_' + mode), +scr > 0 ? t('sess_scr', scr) : '', +jl > 0 ? t('sess_jl', jl) : '')];
+    return [tm(+s0), t('sess_main', c0, c1, fmtH(dur)), t('sess_sub', rate, dec(ma / 1000, 1), dec(tmax / 10, 1), chn ? t('sess_ch', chn + ' · ' + t('mode_' + mode)) : ' · ' + t('mode_' + mode), +scr > 0 ? t('sess_scr', scr) : '', +jl > 0 ? t('sess_jl', jl) : '', cable >= 5 / 60 ? t('sess_cable', fmtH(cable)) : '')];
   }), t('sess_none'));
   // таблица тока / current table
   const dtx = dtFor(d), fcc = dtx ? dtx[1] : [];

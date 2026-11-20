@@ -32,7 +32,7 @@ On top of that, hardware battery protection always works in the kernel (JEITA fr
 ### Modes
 
 - **Care**: current by sensor temperature: from 41 °C about 3.1 A, from 43 °C 2.7 A, from 45 °C 2.0 A (for a fast charger). It relaxes a level only after cooling one more degree, to avoid jumping. Pause from 42 °C, resume at 38 °C.
-- **Fast**: full current. If the sensor reaches 44.0 °C, current goes down to 2.7 A and then level by level to 2.0 A; below 42.5 °C it comes back. From 45 °C — straight to 2.0 A. This keeps the sensor just below 45 °C, where the kernel would cut current to 1.95 A. The pause is an emergency one, from 48 °C.
+- **Fast**: full current. If the sensor reaches 44.0 °C, current goes down to 2.7 A and then level by level to 2.0 A; below 42.5 °C it comes back. From 45 °C — straight to 2.0 A. This keeps the sensor just below 45 °C, where the kernel would cut current to 1.95 A. If the kernel has already cut the current because the chips are hot and the module's level is above the real current, the module goes straight to a level below it, down to level 14 (about 1 A) — that level is used for the hold only. A reduced current is kept for at least 2 minutes, then relaxed one level a minute: the sensor near the connector cools in seconds, and without this delay the hold would switch on and off every half minute. The pause is an emergency one, from 48 °C.
 
 ### Charge by time
 

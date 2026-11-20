@@ -146,7 +146,7 @@ logs() {
   echo; echo "-- config"; grep -v '^#' "$CONF" 2>/dev/null
   echo; echo "-- $(t r_events)"; render_log "$LOG"
   [ -f "$D/restart.dump" ] && { echo; echo "-- last manual restart: module processes before it"; cat "$D/restart.dump"; }
-  echo; echo "-- sessions (start,end,from%,to%,avg mA,max temp×10,charger,max W,mode,screen on %,JEITA lag s)"; cat "$SESS" 2>/dev/null
+  echo; echo "-- sessions (start,end,from%,to%,avg mA,max temp×10,charger,max W,mode,screen on %,JEITA lag s,when 100%)"; cat "$SESS" 2>/dev/null
   echo; echo "-- drain (end,seconds,−%,mAh,deep sleep %,mobile MB,mobile share %,SIMs)"; cat "$DRAIN" 2>/dev/null
   echo; echo "-- history (time,%,temp×10,status,mA,charging,screen,cable,0.01%), last 60"; tail -n 60 "$HIST" 2>/dev/null
 }
@@ -225,7 +225,10 @@ case "$cmd" in
     setc $k "$1"; ev "set_${cmd}_$1"
     if plugged; then [ $k = BRIGHT_CHARGE ] && [ "$1" = 1 ] && bright_max
     else [ $k = AUTO_BATT ] && [ "$1" = 1 ] && bright_auto; fi; true ;;
-  saver) bit "$1" || fail e_arg; setc SAVER_BATT "$1"; ev "set_saver_$1"; [ "$1" = 1 ] && ! plugged && saver_on; true ;;
+  saver)
+    bit "$1" || fail e_arg; setc SAVER_BATT "$1"; ev "set_saver_$1"
+    # выключили — сразу выключаем и экономию, и её «залипание» / off: turn the saver and its sticky flag off now
+    if [ "$1" = 1 ]; then ! plugged && saver_on; else saver_off; fi; true ;;
   usbfast) bit "$1" || fail e_arg; setc USB_FAST "$1"; [ -f $FFC ] && echo "$1" > $FFC; ev "set_usb_$1" ;;
   drainalert) bit "$1" || fail e_arg; setc DRAIN_ALERT "$1" ;;
   lang) case "$1" in auto|ru|en) setc UI_LANG "$1"; UI_LANG=$1; wake_daemon ;; *) fail e_arg ;; esac ;;

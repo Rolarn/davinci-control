@@ -37,17 +37,32 @@ check "статус в module.prop / status in module.prop" "grep -q '^descripti
 echo "2. «Быстро»: удержание ниже 45° / Fast: hold below 45°"
 cat > $SC/fast <<EOF
 $head_sleep
-T=(300 441 441 443 451 438 430 420 420 300)
-[ \$n -le 10 ] && echo \${T[\$((n-1))]} > \$B/temp
-[ \$n = 11 ] && touch \$R/data/adb/modules/davinci-control/disable
+T=(300 441 441 443 451 438 430 420 420 420 420 420 420 420 420 420 420 420 420 420 420 420 420 300 300)
+[ \$n -le 25 ] && echo \${T[\$((n-1))]} > \$B/temp
+[ \$n = 26 ] && touch \$R/data/adb/modules/davinci-control/disable
 exit 0
 EOF
-mkroot $SC/fast; printf 'CC_SMART=0\nHOT_PAUSE=48\nHOT_RESUME=44\n' > $R/$D_/config
+mkroot $SC/fast; echo -3000000 > $R/sys/class/power_supply/battery/current_now; printf 'CC_SMART=0\nHOT_PAUSE=48\nHOT_RESUME=44\n' > $R/$D_/config
 run_daemon
 check "44,1° → ступень 8 / 44.1° → level 8" "grep -q 't=441 lvl=8' $R/trace"
 check "держит и повышает / holds and raises" "grep -q 't=443 lvl=10' $R/trace"
 check "45,1° → ступень 12 / 45.1° → level 12" "grep -q 't=451 lvl=12' $R/trace && grep -q 't=438 lvl=12' $R/trace"
-check "остыло → ступень вниз / cooled → level down" "grep -q 't=420 lvl=11' $R/trace"
+check "остыло — снижение держится 2 мин / cooled: the cut is held for 2 min" "[ \$(grep -c 't=420 lvl=12' $R/trace) -ge 4 ]"
+check "потом ступень вниз раз в минуту / then one level down a minute" "grep -q 't=420 lvl=11' $R/trace && grep -q 't=420 lvl=10' $R/trace"
+check "удержание не дёргается / the hold does not flap" "[ \$(grep -c 'hold_on' $R/$D_/events.log) = 1 ]"
+
+echo "2б. «Быстро»: ядро уже режет ток — ступень ниже реального / Fast: kernel already cuts — level below the real current"
+cat > $SC/below <<EOF
+$head_sleep
+T=(300 441 410 410 410 410 410 410 410 410 410 410 410 410 300)
+[ \$n -le 15 ] && echo \${T[\$((n-1))]} > \$B/temp
+[ \$n = 16 ] && touch \$R/data/adb/modules/davinci-control/disable
+exit 0
+EOF
+mkroot $SC/below; echo -1800000 > $R/sys/class/power_supply/battery/current_now; printf 'CC_SMART=0\nHOT_PAUSE=48\n' > $R/$D_/config; run_daemon
+check "1,8 А при 44,1° → ступень 14 (0,75 А) / 1.8 A at 44.1° → level 14" "grep -q 't=441 lvl=14' $R/trace"
+check "ступень 14 только для удержания: выше 13 ничто другое не ставит / level 14 is hold-only" "grep -q 'HOLD_CAP=14' $M/common.sh && grep -q 'CC_CAP=13' $M/common.sh"
+check "через 2 мин — к L3, затем ниже / after 2 min to L3, then lower" "grep -q 't=410 lvl=14' $R/trace && grep -q 't=410 lvl=12' $R/trace && grep -q 't=410 lvl=11' $R/trace"
 check "события удержания / hold events" "grep -q 'hold_on' $R/$D_/events.log"
 check "без паузы при 45° в «Быстро» / no pause at 45° in Fast" "! grep -q pause_hot $R/$D_/events.log"
 
@@ -66,9 +81,42 @@ mkroot $SC/limit; mkdir -p $R/$D_; echo BRIGHT_CHARGE=1 > $R/$D_/config; run_dae
 check "пауза на 80% / pause at 80%" "grep -q 'pause_limit	80' $R/$D_/events.log"
 check "переключатель реально выключен / switch really off" "grep -q 'en=0 .*why=limit sw=battery_charging_enabled' $R/trace && ! grep -q sw_nostop $R/$D_/events.log"
 check "продолжение с 75% / resume at 75%" "grep -q 'resume	75' $R/$D_/events.log"
-check "сеанс записан с экраном и блоком / session with screen share and charger" "grep -qE '^[0-9]+,[0-9]+,40,74,[0-9]+,300,USB_HVDCP_3,17,care,[0-9]+,0$' $R/$D_/sessions.csv"
+check "сеанс записан с экраном и блоком / session with screen share and charger" "grep -qE '^[0-9]+,[0-9]+,40,74,[0-9]+,300,USB_HVDCP_3,17,care,[0-9]+,0,0$' $R/$D_/sessions.csv"
 check "яркость 100% на зарядке / 100% brightness on charge" "grep -q 'bright_max' $R/$D_/events.log"
-check "автояркость и экономия без кабеля / auto brightness and saver" "grep -q bright_auto $R/$D_/events.log && grep -q saver_on $R/$D_/events.log && [ \$(cat $R/lowpower) = 1 ]"
+check "автояркость без кабеля; экономия по умолчанию не включается / auto brightness; no saver by default" "grep -q bright_auto $R/$D_/events.log && ! grep -q saver_on $R/$D_/events.log && [ \$(cat $R/lowpower) = 0 ]"
+
+echo "3б. Экономия заряда без «залипания» / Battery Saver without the sticky flag"
+cat > $SC/saver <<EOF
+$head_sleep
+case \$n in
+  1) unplug ;;
+  2) echo 0 > \$R/lowpower ;;
+  3) echo 0 > \$BL ;;
+  4) echo 1000 > \$BL ;;
+  5) plug ;;
+  6) unplug ;;
+  7) touch \$R/data/adb/modules/davinci-control/disable ;;
+esac
+exit 0
+EOF
+mkroot $SC/saver; echo 1 > $R/sticky; echo SAVER_BATT=1 > $R/$D_/config; run_daemon
+check "старое «залипание» снято при запуске / old sticky flag cleared at start" "[ -f $R/$D_/saver.v2 ] && grep -q 'settings put global low_power_sticky 0' $R/calls.log"
+check "без кабеля включена, без залипания / on when unplugged, not sticky" "grep -q saver_on $R/$D_/events.log && [ \$(grep -c 'cmd power set-mode 1' $R/calls.log) = 2 ]"
+check "выключил вручную — после включения экрана не включается / manual off is respected" "! grep -q saver_again $R/$D_/events.log && [ \$(grep -c saver_on $R/$D_/events.log) = 2 ]"
+check "выключение модуля выключает экономию и залипание / disabling the module turns both off" "[ \$(cat $R/lowpower) = 0 ] && [ \$(cat $R/sticky) = 0 ]"
+
+echo "3в. Сеанс: время до 100% отдельно от времени на кабеле / session: time to full apart from cable time"
+cat > $SC/tofull <<EOF
+$head_sleep
+C=(90 95 100)
+[ \$n -le 3 ] && echo \${C[\$((n-1))]} > \$B/capacity
+[ \$n = 20 ] && unplug
+[ \$n = 22 ] && touch \$R/data/adb/modules/davinci-control/disable
+exit 0
+EOF
+mkroot $SC/tofull; echo CHARGE_LIMIT=100 > $R/$D_/config; run_daemon
+check "в журнале «за N мин, потом ещё M мин на кабеле» / event with time to full and cable time" "grep -qE 'sess_full	40	[0-9]+	[0-9]+' $R/$D_/events.log"
+check "в таблице сеансов — момент 100% / the 100% moment in the sessions table" "awk -F, '\$4 == 100 && \$12 > \$1 && \$12 < \$2 { ok = 1 } END { exit !ok }' $R/$D_/sessions.csv"
 
 echo "4. Ночной расход в мА, причины и предупреждение / overnight drain mA, causes, alert"
 cat > $SC/drain <<EOF

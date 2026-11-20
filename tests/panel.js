@@ -51,6 +51,8 @@ let bad = 0; const fail = m => { console.log('  ✗ ' + m); bad++; }, ok = m => 
     if (st.ev > 0 && st.ev <= 10) ok(`${tag}: в журнале не больше 10 событий (${st.ev}) / at most 10 events`); else fail(`${tag}: событий в журнале ${st.ev}`);
     if (st.solid === 1 && st.dashed === 2 && /\d/.test(st.typ)) ok(`${tag}: график расхода: линия и два пунктира (${st.typ}) / drain chart`); else fail(`${tag}: график расхода / drain chart ${JSON.stringify(st)}`);
     if (st.fb && st.fbHint && st.off) ok(`${tag}: зарядка к времени показана, журнал приложений и уведомления выключены / charge-by-time shown, app log and notifications off`); else fail(`${tag}: переключатели / toggles ${JSON.stringify(st)}`);
+    const ses = await p.evaluate(() => document.getElementById('sess').textContent);
+    if (/20 → 100% (за|in) 1 (ч|h) 40/.test(ses) && /(ещё 6 ч|then 6 h)/.test(ses)) ok(`${tag}: зарядка до 100% и время на кабеле отдельно / time to full and cable time`); else fail(`${tag}: сеанс до 100% / session to full: ${ses.slice(0, 160)}`);
     if (/насос/i.test(await p.evaluate(() => document.body.textContent))) fail(`${tag}: слово «насос» в панели`); else ok(`${tag}: названия микросхем без жаргона / chip names`);
     await p.screenshot({ path: path.join(SHOTS, `panel_${tag}.png`), fullPage: true });
     if (w === 400) {

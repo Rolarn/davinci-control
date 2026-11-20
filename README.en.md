@@ -61,7 +61,7 @@ Maximum, Balance and Economy profiles plus fine frequency tuning without a reboo
 
 ### ☀️ Brightness and saver
 Rules trigger by themselves when the cable is connected or unplugged.
-- **On battery:** auto brightness and Android's Battery Saver.
+- **On battery:** auto brightness and, if you want it, Android's Battery Saver.
 - **On the cable:** 100% brightness if you want it (off by default).
 </td></tr>
 <tr><td align="center"><img src="assets/mascot/export/feature-stats.svg" width="92" alt="Mascot pointing at a chart"></td><td>

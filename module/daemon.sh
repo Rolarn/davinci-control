@@ -42,6 +42,9 @@ choose
 if [ -n "$SW" ]; then ev start "$(version)" "$SW"; else ev start_nosw "$(version)"; fi
 load_conf
 dt_cache
+# Сборки до rc.7 включали экономию «с залипанием» — один раз снимаем его.
+# Builds before rc.7 left Battery Saver sticky — clear it once.
+[ -f "$D/saver.v2" ] || { saver_unstick; : > "$D/saver.v2"; }
 
 # ---------- ступень тока / current level ----------
 # Перечитывается каждый круг; ядро не приняло — функция выключается до перезагрузки.
@@ -51,7 +54,7 @@ case "$(rd $DISABLE_THERMAL)" in 1|Y|y) CC_OK=0; ev disable_thermal ;; esac
 case "$(rd $SKIP_THERMAL)" in 1|Y|y) CC_OK=2; ev skip_thermal ;; esac
 cc_set() {  # $1 = ступень / level (0 = без ограничения / none)
   [ $CC_OK = 1 ] || return 0
-  v=$1; [ "$v" -gt $CC_CAP ] && v=$CC_CAP
+  v=$1; [ "$v" -gt "${cc_max:-$CC_CAP}" ] && v=${cc_max:-$CC_CAP}
   rdv cur "$CCL"
   # заводская термозащита включена — её ступень не ослабляем / stock thermal on: never weaken its level
   [ "$TH" != module ] && [ "${cur:-0}" -gt "$v" ] && [ "$cur" != "$cc_cur" ] && return 0
@@ -105,10 +108,10 @@ case $TH in module) ev thermal_off ;; mismatch) ev thermal_mismatch ;; nomount) 
 # Состояние сеанса лежит в файле: перезагрузка или перезапуск службы его не теряют.
 # The session state lives in a file: a reboot or a service restart does not lose it.
 s_t0=""
-sess_start() { s_t0=$now; s_c0=$cap; s_tmax=$t; s_sum=0; s_n=0; s_pmax=0; s_typ=""; s_on=0; s_all=0; s_jl=0; jl_t0=""; fb_on=0; fb_for=""; fb_n=0; }
+sess_start() { s_full=0; s_t0=$now; s_c0=$cap; s_tmax=$t; s_sum=0; s_n=0; s_pmax=0; s_typ=""; s_on=0; s_all=0; s_jl=0; jl_t0=""; fb_on=0; fb_for=""; fb_n=0; }
 sess_save() {
   [ -n "$s_t0" ] || return 0
-  put "$D/session" "s_t0=$s_t0; s_c0=$s_c0; s_tmax=$s_tmax; s_sum=$s_sum; s_n=$s_n; s_pmax=$s_pmax; s_typ=$s_typ; s_on=$s_on; s_all=$s_all; s_jl=$s_jl; s_last=$now; s_cap=$cap; fb_on=$fb_on; fb_for=$fb_for; fb_n=$fb_n"
+  put "$D/session" "s_t0=$s_t0; s_c0=$s_c0; s_tmax=$s_tmax; s_sum=$s_sum; s_n=$s_n; s_pmax=$s_pmax; s_typ=$s_typ; s_on=$s_on; s_all=$s_all; s_jl=$s_jl; s_last=$now; s_cap=$cap; s_full=${s_full:-0}; fb_on=$fb_on; fb_for=$fb_for; fb_n=$fb_n"
 }
 sess_charger() {
   rdv ty $U/real_type; rdv uv $U/voltage_now; rdv ui $U/input_current_now
@@ -123,9 +126,14 @@ sess_end() {  # $1 = время конца, $2 = заряд в конце / end 
   if [ $dur -ge 300 ] && [ $gain -ge 1 ]; then
     a=0; [ "$s_n" -gt 0 ] && a=$((s_sum / s_n)); so=0; [ "$s_all" -gt 0 ] && so=$((s_on * 100 / s_all))
     if [ "$CC_SMART" = 1 ]; then md=care; else md=fast; fi
-    # начало,конец,с%,до%,ср.мА,макс.темп×10,блок,макс.Вт,режим,экран вкл %,задержка JEITA с
-    echo "$s_t0,$1,$s_c0,$2,$a,$s_tmax,${s_typ:-?},$s_pmax,$md,$so,$s_jl" >> "$SESS"
-    ev sess "$s_c0" "$2" "$((dur / 60))"
+    # начало,конец,с%,до%,ср.мА,макс.темп×10,блок,макс.Вт,режим,экран вкл %,задержка JEITA с,когда 100%
+    # start,end,from%,to%,avg mA,max temp×10,charger,max W,mode,screen on %,JEITA lag s,when 100%
+    f=${s_full:-0}
+    echo "$s_t0,$1,$s_c0,$2,$a,$s_tmax,${s_typ:-?},$s_pmax,$md,$so,$s_jl,$f" >> "$SESS"
+    # дошёл до 100% и ещё полежал на кабеле — показываем время до полного отдельно
+    # reached 100% and stayed on the cable — the time to full is shown separately
+    if [ "$f" -gt 0 ] && [ $(($1 - f)) -ge 300 ]; then ev sess_full "$s_c0" "$(((f - s_t0) / 60))" "$((($1 - f) / 60))"
+    else ev sess "$s_c0" "$2" "$((dur / 60))"; fi
   fi
   s_t0=""; rm -f "$D/session"
 }
@@ -161,16 +169,20 @@ fb_check() {  # → fb=1, если пора дозаряжать / fb=1 when it 
 pk_m=$(stat -c %Y $PKGL 2>/dev/null)
 rdv cap $B/capacity; rdv t $B/temp; cap=${cap:-50}; t=${t:-250}; set_chg on
 PH=$(ph_edits); desc_key=""; fb_on=0; fb_for=""; fb_n=0
-why=""; scr=""; soff_t=""; i=0; last_h=0; last_pl=""; reg=0; tbl=""; L1=4; L2=8; L3=12
+why=""; scr=""; soff_t=""; i=0; last_h=0; last_pl=""; reg=0; reg_t=0; rd_t=0; tbl=""; L1=4; L2=8; L3=12
 # Сеанс, прерванный перезагрузкой: продолжаем, если кабель на месте, иначе закрываем по последней записи.
 # A session cut by a reboot: continue if the cable is still in, otherwise close it at the last record.
 if [ -f "$D/session" ]; then
-  . "$D/session"
+  s_full=0; . "$D/session"
   if plugged; then jl_t0=""; else sess_end "${s_last:-$now}" "${s_cap:-$cap}"; fi
 fi
 
 while :; do
-  if [ -f "$MODDIR/disable" ] || [ -f "$MODDIR/remove" ]; then stop_all; ev disabled; exit 0; fi
+  if [ -f "$MODDIR/disable" ] || [ -f "$MODDIR/remove" ]; then
+    # экономию, включённую модулем, не оставляем / no Battery Saver left on by the module
+    [ "$SAVER_BATT" = 1 ] && [ "$(saver_get)" = 1 ] && saver_off
+    saver_unstick; stop_all; ev disabled; exit 0
+  fi
   load_conf
   rdv cap $B/capacity; rdv t $B/temp; rdv st $B/status; cap=${cap:-50}; t=${t:-250}
   now=$(date +%s)
@@ -237,13 +249,28 @@ while :; do
     # Ступени L2…L3 — примерно 2,7…2,0 А по действующей таблице ядра.
     # fast: keep the sensor just below 45 °C where the kernel cuts to 1.95 A (JEITA).
     # Levels L2…L3 are about 2.7…2.0 A in the kernel table in effect.
-    c=${cc_cur:-0}
+    c=${cc_cur:-0}; want_cc=$c
+    rdv I $B/current_now; I=${I#-}; case "$I" in ''|*[!0-9]*) I=0 ;; esac
     if [ "$t" -ge $REG_HI ]; then
       if [ "$t" -ge 450 ]; then want_cc=$L3; elif [ "$c" -lt $L2 ]; then want_cc=$L2; elif [ "$c" -lt $L3 ]; then want_cc=$((c + 1)); else want_cc=$L3; fi
-    elif [ "$t" -lt $REG_LO ]; then
-      if [ "$c" -gt $L2 ]; then want_cc=$((c - 1)); else want_cc=0; fi
-    else want_cc=$c; fi
-    cc_q=1; cc_set "$want_cc"; cc_q=0
+      [ "$want_cc" -lt "$c" ] && want_cc=$c
+      # Ядро уже режет ток по нагреву микросхем, и наша ступень выше реального тока ничего не ограничивает:
+      # тогда сразу ступень ниже него, вплоть до 14 (≈ 1 А). / The kernel already cuts current for hot chips and
+      # our level is above the real current, so it limits nothing: go straight below it, down to level 14 (≈ 1 A).
+      ua=$(cc_ua "$tbl" "$want_cc")
+      if [ "$I" -ge 500000 ] && [ -n "$ua" ] && [ $((ua / 1000 * 100)) -ge $((I / 1000 * 95)) ]; then
+        b=$(cc_below "$tbl" $((I / 10 * 9))); [ "$b" -gt "$want_cc" ] && want_cc=$b
+      fi
+      [ "$want_cc" -gt "$c" ] && reg_t=$now
+    elif [ "$t" -lt $REG_LO ] && [ "$c" -gt 0 ]; then
+      # сниженный ток держим не меньше 2 минут, потом ослабляем по ступени в минуту: датчик у разъёма
+      # остывает за секунды и иначе удержание дёргается / hold at least 2 min, then relax one level a minute
+      if [ $((now - reg_t)) -ge 120 ] && [ $((now - rd_t)) -ge 60 ]; then
+        if [ "$c" -gt $L3 ]; then want_cc=$L3; elif [ "$c" -gt $L2 ]; then want_cc=$((c - 1)); else want_cc=0; fi
+        rd_t=$now
+      fi
+    fi
+    cc_max=$HOLD_CAP; cc_q=1; cc_set "$want_cc"; cc_q=0; cc_max=$CC_CAP
     [ "${cc_cur:-0}" -gt 0 ] && reg=1
     if [ "$c" = 0 ] && [ $reg = 1 ]; then ev hold_on "$cc_cur" "$(deg "$t")"
     elif [ "$c" -gt 0 ] && [ $reg = 0 ]; then ev hold_off "$(deg "$t")"; fi
@@ -256,6 +283,7 @@ while :; do
   if [ "${bl:-1}" -gt 0 ]; then s=on; else s=off; fi
   if [ $pl = 1 ]; then
     [ "$t" -gt "$s_tmax" ] && s_tmax=$t
+    [ "${s_full:-0}" = 0 ] && [ "$cap" -ge 100 ] && [ "${s_c0:-100}" -lt 100 ] && s_full=$now
     if [ "$st" = Charging ]; then
       rdv I $B/current_now; I=${I#-}; I=$((${I:-0} / 1000)); s_sum=$((s_sum + I)); s_n=$((s_n + 1))
       s_all=$((s_all + 1)); [ $s = on ] && s_on=$((s_on + 1))
@@ -332,7 +360,6 @@ while :; do
         drain_check
       fi
     fi
-    [ $s = on ] && [ "$pl" = 0 ] && [ "$SAVER_BATT" = 1 ] && [ "$(saver_get)" != 1 ] && { saver_on; ev saver_again; }
     scr=$s; last_h=0
   fi
 

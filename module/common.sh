@@ -27,7 +27,7 @@ SWITCHES="charging_enabled:1:0 battery_charging_enabled:1:0 input_suspend:0:1"
 
 defaults() {
   CHARGE_LIMIT=80; CHARGE_RESUME=75; HOT_PAUSE=42; HOT_RESUME=38; USB_FAST=1; LITTLE_MAX=1612800; BIG_MAX=0
-  BRIGHT_CHARGE=0; AUTO_BATT=1; SAVER_BATT=1; THERMAL_CHG=0; CC_SMART=1; UI_LANG=auto; SKIN=blue; DRAIN_ALERT=1; ACK=""
+  BRIGHT_CHARGE=0; AUTO_BATT=1; SAVER_BATT=0; THERMAL_CHG=0; CC_SMART=1; UI_LANG=auto; SKIN=blue; DRAIN_ALERT=1; ACK=""
   APP_LOG=0; NOTIFY=0; FULL_BY=""
 }
 # Число в границах, иначе значение по умолчанию: испорченная настройка не должна ронять службу.
@@ -42,8 +42,8 @@ load_conf() {
   defaults; [ -f "$CONF" ] && . "$CONF"
   _num CHARGE_LIMIT 50 100 80; _num CHARGE_RESUME 40 100 $((CHARGE_LIMIT - 5)); _num HOT_PAUSE 0 50 42; _num HOT_RESUME 30 50 38
   _num LITTLE_MAX 0 4000000 1612800; _num BIG_MAX 0 4000000 0
-  for _k in USB_FAST AUTO_BATT SAVER_BATT CC_SMART DRAIN_ALERT; do _num $_k 0 1 1; done
-  for _k in BRIGHT_CHARGE THERMAL_CHG APP_LOG NOTIFY; do _num $_k 0 1 0; done
+  for _k in USB_FAST AUTO_BATT CC_SMART DRAIN_ALERT; do _num $_k 0 1 1; done
+  for _k in BRIGHT_CHARGE SAVER_BATT THERMAL_CHG APP_LOG NOTIFY; do _num $_k 0 1 0; done
   case "$UI_LANG" in auto|ru|en) ;; *) UI_LANG=auto ;; esac
   case "$SKIN" in blue|red|black) ;; *) SKIN=blue ;; esac
   case "$FULL_BY" in [0-1][0-9]:[0-5][0-9]|2[0-3]:[0-5][0-9]) ;; *) FULL_BY="" ;; esac
@@ -63,7 +63,7 @@ LITTLE_MAX=1612800
 BIG_MAX=0
 BRIGHT_CHARGE=0
 AUTO_BATT=1
-SAVER_BATT=1
+SAVER_BATT=0
 CC_SMART=1
 THERMAL_CHG=0
 UI_LANG=auto
@@ -184,7 +184,13 @@ sput() {
 bright_max() { sput system screen_brightness_mode 0 && sput system screen_brightness 255; r=$?; cmd display set-brightness 1.0 </dev/null >/dev/null 2>&1; return $r; }
 bright_auto() { sput system screen_brightness_mode 1; }
 saver_get() { sget global low_power; }
-saver_on() { cmd power set-mode 1 </dev/null >/dev/null 2>&1; [ "$(saver_get)" = 1 ] || sput global low_power 1; }
+# Экономию включаем без «залипания»: включённую вручную (так её включает и cmd power) Android запоминает
+# в low_power_sticky и потом сам включает после каждой зарядки — даже когда модуль её больше не просит.
+# Battery Saver without the sticky flag: a manually enabled saver (cmd power does the same) is remembered in
+# low_power_sticky, and Android turns it back on after every charge — even when the module no longer asks.
+saver_unstick() { [ "$(sget global low_power_sticky)" = 1 ] && sput global low_power_sticky 0; return 0; }
+saver_on() { cmd power set-mode 1 </dev/null >/dev/null 2>&1; [ "$(saver_get)" = 1 ] || sput global low_power 1; saver_unstick; }
+saver_off() { cmd power set-mode 0 </dev/null >/dev/null 2>&1; [ "$(saver_get)" = 0 ] || sput global low_power 0; saver_unstick; }
 net_rx() {  # $1 = шаблон интерфейса / interface glob
   s=0; for f in $R/sys/class/net/$1/statistics/rx_bytes; do [ -r "$f" ] && s=$((s + $(cat "$f"))); done; echo $s
 }
@@ -201,6 +207,20 @@ done
 [ -n "$CCL" ] || { CCL=$B/system_temp_level; CCLMAX=$B/num_system_temp_levels; CCLN=system_temp_level; }
 REG_HI=440; REG_LO=425           # удержание «Быстро»: окно датчика, °C×10 / fast-mode hold window
 CC_CAP=13                        # выше не ставим: последние ступени почти останавливают зарядку / never above
+HOLD_CAP=14                      # только удержание в «Быстро»: ступень 14 ≈ 1 А / fast-mode hold only, ≈ 1 A
+# Ток ступени и первая ступень не выше заданного тока по действующей таблице, мкА.
+# A level's current, and the first level at or below a given current, in the table in effect, µA.
+_tbl() { _t=""; [ -f "$D/dt.tables" ] && while IFS='=' read -r _k _vals; do [ "$_k" = "$1" ] && _t=$_vals; done < "$D/dt.tables"; }
+cc_ua() {  # ключ ступень / key level
+  _tbl "$1"; _i=0
+  for _x in $_t; do [ $_i = "$2" ] && { echo "$_x"; return 0; }; _i=$((_i + 1)); done
+  return 1
+}
+cc_below() {  # ключ мкА / key µA → ступень, не выше HOLD_CAP / level, at most HOLD_CAP
+  _tbl "$1"; _i=0
+  for _x in $_t; do [ "$_x" -le "$2" ] && break; _i=$((_i + 1)); done
+  [ $_i -gt $HOLD_CAP ] && _i=$HOLD_CAP; echo $_i
+}
 # Какая таблица тока действует сейчас (как в ядре, smblib_therm_charging). / the table in effect now.
 cc_table() {
   rdv _ty $U/real_type; rdv _cp $U/smb_en_reason
