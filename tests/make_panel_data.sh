@@ -35,5 +35,9 @@ sed -i "s/^cc=0 /cc=10 /; s/ reg=0 / reg=1 /; s/ pl=0 / pl=1 /" $D/state 2>/dev/
 echo 10 > $R/sys/class/thermal/cooling_device5/cur_state; echo 441 > $R/sys/class/power_supply/battery/temp
 echo module > $D/thermal.state
 echo "FULL_BY=07:00" >> $D/config
+# работа в фоне: 12 приложений ограничены Android, одно — пользователем, экономия по расписанию на 75%
+# background work: 12 apps limited by Android, one by the user, Battery Saver scheduled at 75%
+mkdir -p $R/appops; for i in $(seq 1 12); do echo default > $R/appops/com.app$i; done; echo ignore > $R/appops/com.mine; echo 75 > $R/trig
+tune bgscan >/dev/null; tune bglist > "$ROOT/tests/out/bglist.json"
 tune json > "$ROOT/tests/out/json.json"; tune strings > "$ROOT/tests/out/strings.json"; tune events > "$ROOT/tests/out/events.json"
 python3 -m json.tool "$ROOT/tests/out/json.json" >/dev/null && echo "panel data: OK"

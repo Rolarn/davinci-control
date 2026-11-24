@@ -6,7 +6,7 @@ const fs = require('fs'), path = require('path');
 const OUT = path.join(__dirname, 'out'), SHOTS = process.argv[2] || OUT;
 const page_ = 'file://' + path.join(__dirname, '..', 'module', 'webroot', 'index.html');
 const J = JSON.parse(fs.readFileSync(path.join(OUT, 'json.json'), 'utf8'));
-const S = fs.readFileSync(path.join(OUT, 'strings.json'), 'utf8'), EV = fs.readFileSync(path.join(OUT, 'events.json'), 'utf8');
+const S = fs.readFileSync(path.join(OUT, 'strings.json'), 'utf8'), EV = fs.readFileSync(path.join(OUT, 'events.json'), 'utf8'), BGL = fs.readFileSync(path.join(OUT, 'bglist.json'), 'utf8');
 let bad = 0; const fail = m => { console.log('  ✗ ' + m); bad++; }, ok = m => console.log('  ✓ ' + m);
 
 (async () => {
@@ -15,14 +15,14 @@ let bad = 0; const fail = m => { console.log('  ✗ ' + m); bad++; }, ok = m => 
     const p = await b.newPage({ viewport: { width: w, height: 860 }, locale: lang === 'en' ? 'en-US' : 'ru-RU' });
     const errs = []; p.on('pageerror', e => errs.push(e.message)); p.on('console', m => m.type() === 'error' && errs.push(m.text()));
     const j = JSON.parse(JSON.stringify(J)); j.conf.uiLang = lang;
-    await p.addInitScript(([json, strings, events]) => {
+    await p.addInitScript(([json, strings, events, bglist]) => {
       window.__calls = [];
       window.ksu = { exec(cmd, opts, cb) {
         window.__calls.push(cmd);
-        const a = cmd.split(' ')[2], out = a === 'json' || a === 'live' ? json : a === 'strings' ? strings : a === 'events' ? events : a === 'changelog' ? '1.0.0\tПервый публичный релиз\tFirst public release' : a === 'logs' ? 'log text' : '';
+        const a = cmd.split(' ')[2], out = a === 'json' || a === 'live' ? json : a === 'strings' ? strings : a === 'events' ? events : a === 'bglist' ? bglist : a === 'changelog' ? '1.0.0\tПервый публичный релиз\tFirst public release' : a === 'logs' ? 'log text' : '';
         setTimeout(() => window[cb](0, out, ''), 30);
       } };
-    }, [JSON.stringify(j), S, EV]);
+    }, [JSON.stringify(j), S, EV, BGL]);
     await p.goto(page_); await p.waitForTimeout(900);
     const tag = `${w}_${lang}`;
     if (errs.length) fail(`${tag}: ошибки JS / JS errors: ${errs.join(' | ')}`); else ok(`${tag}: без ошибок JS / no JS errors`);
@@ -47,12 +47,15 @@ let bad = 0; const fail = m => { console.log('  ✗ ' + m); bad++; }, ok = m => 
     if (!st.cut.length) ok(`${tag}: подписи в плитках помещаются целиком / box labels fit`); else fail(`${tag}: обрезаны подписи / cut labels: ${st.cut.join(' | ')}`);
     // стенд: файлы модуля действуют, в настройках — отключено / bench: module configs in effect, setting says off
     if (st.th[0] === false && st.th[1] && st.th[2] === '') ok(`${tag}: заводское снижение: выключено и подписано / stock reduction: off and labelled`); else fail(`${tag}: заводское снижение / stock reduction ${JSON.stringify(st.th)}`);
-    if (st.order === 'cNow cCharge cUse cPerf cBright cLog cPanel') ok(`${tag}: порядок блоков / card order`); else fail(`${tag}: порядок блоков / card order: ${st.order}`);
+    if (st.order === 'cNow cCharge cUse cPerf cBright cBg cLog cPanel') ok(`${tag}: порядок блоков / card order`); else fail(`${tag}: порядок блоков / card order: ${st.order}`);
     if (st.ev > 0 && st.ev <= 10) ok(`${tag}: в журнале не больше 10 событий (${st.ev}) / at most 10 events`); else fail(`${tag}: событий в журнале ${st.ev}`);
     if (st.solid === 1 && st.dashed === 2 && /\d/.test(st.typ)) ok(`${tag}: график расхода: линия и два пунктира (${st.typ}) / drain chart`); else fail(`${tag}: график расхода / drain chart ${JSON.stringify(st)}`);
     if (st.fb && st.fbHint && st.off) ok(`${tag}: зарядка к времени показана, журнал приложений и уведомления выключены / charge-by-time shown, app log and notifications off`); else fail(`${tag}: переключатели / toggles ${JSON.stringify(st)}`);
     const ses = await p.evaluate(() => document.getElementById('sess').textContent);
     if (/20 → 100% (за|in) 1 (ч|h) 40/.test(ses) && /(ещё 6 ч|then 6 h)/.test(ses)) ok(`${tag}: зарядка до 100% и время на кабеле отдельно / time to full and cable time`); else fail(`${tag}: сеанс до 100% / session to full: ${ses.slice(0, 160)}`);
+    const bg = await p.evaluate(() => ({ st: document.getElementById('bgSt').textContent, cls: document.getElementById('bgSt').className, all: document.getElementById('bgAll').textContent,
+      warn: document.getElementById('bgWarn').textContent, hint: document.getElementById('bgHint').textContent, prob: document.getElementById('problems').textContent }));
+    if (/12/.test(bg.st) && /warn/.test(bg.cls) && /12/.test(bg.all) && /75%/.test(bg.warn) && /\(1\)/.test(bg.hint) && /12/.test(bg.prob)) ok(`${tag}: «Работа в фоне»: ${bg.st} · ${bg.all}`); else fail(`${tag}: «Работа в фоне» / background work ${JSON.stringify(bg)}`);
     if (/насос/i.test(await p.evaluate(() => document.body.textContent))) fail(`${tag}: слово «насос» в панели`); else ok(`${tag}: названия микросхем без жаргона / chip names`);
     await p.screenshot({ path: path.join(SHOTS, `panel_${tag}.png`), fullPage: true });
     if (w === 400) {
@@ -72,6 +75,18 @@ let bad = 0; const fail = m => { console.log('  ✗ ' + m); bad++; }, ok = m => 
       await p.evaluate(() => document.querySelector('#mode button[data-v="care"]').click()); await p.waitForTimeout(400);
       const called = await p.evaluate(() => window.__calls.some(c => c.endsWith('chgmode care')));
       if (called) ok(`${tag}: команда режима отправлена / mode command sent`); else fail(`${tag}: команда режима не ушла / mode command not sent`);
+      // «Разрешить всем» — только со второго нажатия; список с кнопками / allow all needs a second tap; the list
+      const before = await p.evaluate(() => window.__calls.length);
+      await p.evaluate(() => document.getElementById('bgAll').click()); await p.waitForTimeout(150);
+      const one = await p.evaluate(n => ({ sent: window.__calls.slice(n).some(c => c.includes('bgallow')), txt: document.getElementById('bgAll').textContent }), before);
+      await p.evaluate(() => document.getElementById('bgAll').click()); await p.waitForTimeout(300);
+      const two = await p.evaluate(n => window.__calls.slice(n).some(c => c.endsWith('bgallow all')), before);
+      if (!one.sent && /(ещё|again)/.test(one.txt) && two) ok(`${tag}: «Разрешить всем» со второго нажатия / allow all on the second tap`); else fail(`${tag}: подтверждение / confirmation ${JSON.stringify(one)} ${two}`);
+      await p.evaluate(() => document.getElementById('bgList').click()); await p.waitForTimeout(500);
+      const lst = await p.evaluate(() => ({ rows: document.querySelectorAll('#mBody .bgr').length, btns: document.querySelectorAll('#mBody .bgr button').length }));
+      if (lst.rows === 13 && lst.btns === 12) ok(`${tag}: список: 12 с кнопкой, 1 свой без / list: 12 with a button, 1 own without`); else fail(`${tag}: список / list ${JSON.stringify(lst)}`);
+      await p.screenshot({ path: path.join(SHOTS, `panel_${tag}_bglist.png`) });
+      await p.click('#mClose'); await p.waitForTimeout(300);
       // все события: читаемый список и копирование / all events: a readable list with copy
       await p.evaluate(() => document.getElementById('showLogs').click()); await p.waitForTimeout(500);
       const sheet = await p.evaluate(() => ({ open: document.getElementById('modal').classList.contains('open'), n: document.querySelectorAll('#mBody li').length, raw: /\t|\bset_|\bcc_/.test(document.getElementById('mBody').textContent), copy: getComputedStyle(document.getElementById('mCopy')).display !== 'none' }));

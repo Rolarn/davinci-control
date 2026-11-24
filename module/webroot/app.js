@@ -60,6 +60,8 @@ async function load(liveOnly) {
     if (lite) Object.assign(data, j); else { data = j; lastFull = Date.now(); if (j.conf) setLang(j.conf.uiLang); }
     lastOk = Date.now();
     render(data);
+    // свежий подсчёт «работы в фоне» один раз при открытии панели / a fresh background count once per panel open
+    if (!bgScanned && !lite) { bgScanned = true; sh(`sh ${T} bgscan`).then(() => { inflight = 0; return load(); }).catch(() => {}); }
   } catch (e) {
     setStatus('bad', t('st_nodata'), 'problem');
     renderProblems([{ lvl: 'bad', text: e.message }]);
@@ -310,6 +312,9 @@ function problems(d) {
   if (ok.thermal === 'nomount') p.push({ id: 'nomount', lvl: 'warn', text: t('p_nomount'), go: 'cCharge' });
   if (ok.thermal !== 'stock' && d.conf.hot === 0) p.push({ id: 'noprot', lvl: 'warn', text: t('p_noprot'), go: 'cCharge' });
   if (b.temp >= 450) p.push({ lvl: 'warn', text: t('p_hot', dec(b.temp / 10, 1), b.status === 'Charging' ? t('p_hot_chg') : t('p_hot_idle')), go: 'cNow' });
+  const g = d.bg || {};
+  if (g.def > 0) p.push({ id: 'bgapps', lvl: 'warn', text: t('p_bg', appsN(g.def)), go: 'cBg' });
+  if (g.mode === 0 && g.trig > 0) p.push({ id: 'bgsched', lvl: 'warn', text: t('p_sched', g.trig), go: 'cBg' });
   if (d.conf.drainAlert === 1 && d.drainAlert && d.drainAlert.length === 2) p.push({ id: 'drain', lvl: 'warn', text: t('p_drain', d.drainAlert[0], d.drainAlert[1]), go: 'cUse' });
   // «Понятно» прячет предупреждение, пока оно не исчезнет и не появится снова
   // “Got it” hides a warning until it goes away and comes back
@@ -318,6 +323,91 @@ function problems(d) {
   return p.filter(x => !acked.includes(x.id));
 }
 const ackBusy = {};
+
+// ---------- работа в фоне / background work ----------
+let bgScanned = false, bgSure = 0, bgUndoSure = 0, bgBusy = false, bgWarnKey = '';
+// «у 1 приложения», «у 5 приложений» / "1 app", "5 apps"
+const appsN = n => t(LANG === 'en' ? (n === 1 ? 'bg_n1' : 'bg_nn') : (n % 10 === 1 && n % 100 !== 11 ? 'bg_n1' : 'bg_nn'), n);
+function renderBg(d) {
+  const g = d.bg || {}, def = g.def, st = $('bgSt'), sched = g.mode === 0 && g.trig > 0;
+  if (def == null) { st.className = 'cst idle'; st.textContent = t('bg_st_unk'); }
+  else if (def > 0) { st.className = 'cst warn'; st.textContent = t('bg_st_lim', appsN(def)); }
+  else { st.className = 'cst ok'; st.textContent = t('bg_st_ok'); }
+  // экономия сейчас и расписание: строка с кнопкой / saver now and the schedule: a line with a button
+  const rows = [];
+  if (d.saver === 1) rows.push([t('bg_sv_on'), t('bg_sv_off'), 'saveroff']);
+  if (sched) rows.push([t('bg_sched', g.trig), t('bg_sched_rm'), 'saverunsched']);
+  else if (g.mode === 1) rows.push([t('bg_routine'), '', '']);
+  const key = JSON.stringify(rows) + LANG;
+  if (key !== bgWarnKey) {
+    bgWarnKey = key; const box = $('bgWarn'); box.innerHTML = '';
+    for (const [text, btn, cmd] of rows) {
+      const div = document.createElement('div'); div.className = 'prob warn';
+      const s = document.createElement('span'); s.textContent = text; div.appendChild(s);
+      if (btn) { const b = document.createElement('button'); b.type = 'button'; b.textContent = btn; b.addEventListener('click', () => bgRun(cmd, 'applied')); div.appendChild(b); }
+      box.appendChild(div);
+    }
+  }
+  $('bgHint').textContent = (def > 0 ? t('bg_hint_lim') : t('bg_hint_ok')) + (g.ign > 0 ? ' ' + t('bg_ign', g.ign) : '');
+  const all = $('bgAll'), sure = bgSure > Date.now();
+  all.style.display = def > 0 ? '' : 'none'; all.classList.toggle('sure', sure);
+  all.textContent = sure ? t('bg_sure', appsN(def)) : t('bg_all', def);
+  $('bgList').classList.toggle('sec', def > 0); $('bgList').style.gridColumn = def > 0 ? '' : '1 / -1';
+  const un = $('bgUndo'), usure = bgUndoSure > Date.now();
+  un.style.display = g.mine > 0 ? '' : 'none'; un.classList.toggle('sure', usure);
+  un.textContent = usure ? t('bg_undo_sure') : t('bg_undo', g.mine);
+  for (const b of [all, un]) b.disabled = bgBusy;
+}
+async function bgRun(args, okKey) {
+  const c = $('bgConf'); bgBusy = true; bgSure = bgUndoSure = 0; if (data) renderBg(data);
+  setConf(c, 'wait wrap', t('saving'));
+  try {
+    const r = await sh(`sh ${T} ${args}`, 60000);
+    if (r.errno !== 0) throw new Error((r.stdout || r.stderr || '').trim());
+    inflight = 0; await load();
+    setConf(c, 'ok wrap', '✓ ' + t(okKey, parseInt(r.stdout, 10) || 0));
+    mascotFire(head, 'applied'); mascotFire(dockM, 'applied');
+  } catch (e) { setConf(c, 'bad wrap', '✗ ' + t('error', e.message)); }
+  bgBusy = false; if (data) renderBg(data);
+}
+// опасные кнопки — с подтверждением вторым нажатием / risky buttons need a second tap
+$('bgAll').addEventListener('click', () => {
+  if (bgSure > Date.now()) { bgRun('bgallow all', 'bg_done'); return; }
+  bgSure = Date.now() + 4000; if (data) renderBg(data); setTimeout(() => { if (data) renderBg(data); }, 4100);
+});
+$('bgUndo').addEventListener('click', () => {
+  if (bgUndoSure > Date.now()) { bgRun('bgundo', 'bg_undone'); return; }
+  bgUndoSure = Date.now() + 4000; if (data) renderBg(data); setTimeout(() => { if (data) renderBg(data); }, 4100);
+});
+$('bgList').addEventListener('click', async () => {
+  const box = document.createElement('div'); box.className = 'bgl'; box.textContent = t('loading');
+  openSheet(t('bg'), box, false);
+  try {
+    const l = JSON.parse((await sh(`sh ${T} bglist`)).stdout); box.innerHTML = '';
+    const part = (title, note, list, canAllow) => {
+      const h = document.createElement('h3'); h.textContent = t(title, list.length); box.appendChild(h);
+      if (note) { const p = document.createElement('p'); p.textContent = t(note); box.appendChild(p); }
+      if (!list.length) { const p = document.createElement('p'); p.textContent = t('bg_l_none'); box.appendChild(p); return; }
+      for (const pkg of list.slice().sort()) {
+        const r = document.createElement('div'); r.className = 'bgr';
+        const c = document.createElement('code'); c.textContent = pkg; r.appendChild(c);
+        if (canAllow) {
+          const b = document.createElement('button'); b.type = 'button'; b.textContent = t('bg_allow1');
+          b.addEventListener('click', async () => {
+            b.disabled = true; b.textContent = '…';
+            try { const x = await sh(`sh ${T} bgallow ${pkg}`); if (x.errno !== 0 || x.stdout.trim() !== '1') throw new Error(); b.textContent = '✓ ' + t('bg_ok1'); inflight = 0; load(); }
+            catch (e) { b.disabled = false; b.textContent = t('bg_allow1'); toast(t('notapplied')); }
+          });
+          r.appendChild(b);
+        }
+        box.appendChild(r);
+      }
+    };
+    part('bg_l_def', 'bg_l_def_s', l.def, true);
+    part('bg_l_ign', 'bg_l_ign_s', l.ign, false);
+    if (l.mine.length) part('bg_l_mine', 'bg_l_mine_s', l.mine, false);
+  } catch (e) { box.textContent = t('error', e.message); }
+});
 async function ack(id) {
   if (data) { data.conf.ack = ((data.conf.ack || '') + ' ' + id).trim(); render(data); }
   try { await sh(`sh ${T} ack ${id}`); } catch (e) { toast(t('error', e.message)); }
@@ -601,6 +691,7 @@ function render(d) {
   // журнал / log
   items($('events'), (d.events || []).slice(-10).reverse().map(evRow), t('ev_none'));
   renderDiag(d.diag, d.time);
+  renderBg(d);
   mark($('langSeg'), cf.uiLang || 'auto');
 }
 // Ход диагностики: «N/12 время_начала» — шаг, его название и сколько прошло. / diagnostics progress: step, its name, elapsed.

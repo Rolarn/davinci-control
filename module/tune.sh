@@ -63,6 +63,8 @@ juev() {
   awk -F= -v keys=" $* " 'BEGIN { printf "{" } { k = $1; sub(/^POWER_SUPPLY_/, "", k); if (index(keys, " " k " ")) { v = $2; gsub(/["\\]/, "", v); printf "%s\"%s\":\"%s\"", (n++ ? "," : ""), k, v } } END { printf "}" }' "$f" 2>/dev/null || printf '{}'
 }
 jarr() { printf '[%s]' "$(echo $1 | tr ' ' ',')"; }
+# массив строк из слов без кавычек и пробелов (имена пакетов) / an array of strings from plain words (package names)
+jsarr() { printf '['; _s=""; for _x in $1; do printf '%s"%s"' "$_s" "$_x"; _s=","; done; printf ']'; }
 # Ход диагностики; если процесса уже нет или он молчит дольше 2 минут — «error:stuck», чтобы панель не ждала вечно.
 # Diagnostics progress; when the process is gone or silent for over 2 minutes — error:stuck, so the panel never waits forever.
 diag_status() {
@@ -134,6 +136,9 @@ json() {
   dt_cache 2>/dev/null
   printf '"dt":{'; n=0; for k in fcc qc3 qc3cp qc2 dcp pd; do [ $n = 1 ] && printf ','; n=1; printf '"%s":%s' $k "$(jarr "$(sed -n "s/^$k=//p" "$D/dt.tables" 2>/dev/null)")"; done; printf '},'
   printf '"drainAlert":%s,' "$(jarr "$(rd "$D/drain.alert")")"
+  mine=0; [ -f "$D/bg.allowed" ] && mine=$(grep -c . "$D/bg.allowed")
+  printf '"bg":{"def":%s,"ign":%s,"t":%s,"mine":%s,"trig":%s,"mode":%s,"sticky":%s},' "$(jnum "$(bg_get def)")" "$(jnum "$(bg_get ign)")" "$(jnum "$(bg_get t)")" "$mine" \
+    "$(jnum "$(sget global low_power_trigger_level)")" "$(jnum "$(sget global automatic_power_save_mode)")" "$(jnum "$(sget global low_power_sticky)")"
   printf '"history":%s,"drain":%s,"sessions":%s,"events":%s,"typ":%s,' "$(jhist)" "$(jlines "$DRAIN" 60)" "$(jlines "$SESS" 10)" "$(jlines "$LOG" 10)" "$(jtyp)"
   jcommon; printf '}\n'
 }
@@ -164,6 +169,33 @@ case "$cmd" in
   json) json ;;
   live) live ;;
   strings) jstrings ;;
+  # ----- работа в фоне / background work -----
+  bgscan) bg_scan; echo "def=$(bg_get def) ign=$(bg_get ign)" ;;
+  bglist)  # кто ограничен Android, кто тобой, кому разрешил модуль / limited by Android, by you, allowed by the module
+    printf '{"def":%s,"ign":%s,"mine":%s}\n' "$(jsarr "$(bg_list default)")" "$(jsarr "$(bg_list ignore)")" "$(jsarr "$(grep -E '^[A-Za-z0-9_.]+$' "$D/bg.allowed" 2>/dev/null)")" ;;
+  bgallow)  # all или имена пакетов; трогает только default, свой запрет (ignore) не трогает / only default, never ignore
+    def=$(bg_list default); [ "$1" = all ] && set -- $def
+    n=0; touch "$D/bg.allowed"
+    for p in "$@"; do
+      case "$p" in ''|*[!A-Za-z0-9_.]*) continue ;; esac
+      case " $(echo $def) " in *" $p "*) ;; *) continue ;; esac
+      cmd appops set "$p" RUN_ANY_IN_BACKGROUND allow </dev/null >/dev/null 2>&1 || continue
+      grep -qx "$p" "$D/bg.allowed" || echo "$p" >> "$D/bg.allowed"; n=$((n + 1))
+    done
+    bg_scan; ev bg_allow "$n"; echo "$n" ;;
+  bgundo)  # вернуть как было: default тем, кому разрешил модуль / back as it was
+    n=0
+    if [ -f "$D/bg.allowed" ]; then
+      while read -r p; do
+        case "$p" in ''|*[!A-Za-z0-9_.]*) continue ;; esac
+        cmd appops set "$p" RUN_ANY_IN_BACKGROUND default </dev/null >/dev/null 2>&1 && n=$((n + 1))
+      done < "$D/bg.allowed"
+      rm -f "$D/bg.allowed"
+    fi
+    bg_scan; ev bg_undo "$n"; echo "$n" ;;
+  saveroff) saver_off; ev saver_off_panel ;;
+  saverunsched)  # убрать расписание экономии Android по проценту заряда / remove Android's saver schedule
+    l=$(sget global low_power_trigger_level); sput global low_power_trigger_level 0; ev saver_unsched "${l:-0}" ;;
   events) jlines "$LOG" 400; echo ;;
   logs) logs ;;
   savelogs)
@@ -250,5 +282,5 @@ case "$cmd" in
     a=$(for x in $ACK; do [ "$x" != "$id" ] && echo "$x"; done | tr '\n' ' ')
     [ "${1#-}" = "$1" ] && a="$a $id"
     a=$(echo $a); setc ACK "\"$a\"" ;;
-  *) echo "panel json live strings events logs savelogs diag restart changelog full [off] limit N hot N little N big N profile perf|balance|eco chgmode care|fast thermalchg 0|1 brightcharge 0|1 autobatt 0|1 saver 0|1 usbfast 0|1 drainalert 0|1 fullby HH:MM|off applog 0|1 notify 0|1 lang auto|ru|en skin blue|red|black ack [-]ID" ;;
+  *) echo "panel json live strings events logs savelogs diag restart changelog full [off] limit N hot N little N big N profile perf|balance|eco chgmode care|fast thermalchg 0|1 brightcharge 0|1 autobatt 0|1 saver 0|1 usbfast 0|1 drainalert 0|1 bgscan bglist bgallow all|PKG… bgundo saveroff saverunsched fullby HH:MM|off applog 0|1 notify 0|1 lang auto|ru|en skin blue|red|black ack [-]ID" ;;
 esac

@@ -91,3 +91,9 @@ Both are off by default. Notifications are posted with `cmd notification post` a
 ## Checks before a release
 
 The test bench in [`tests/`](../tests) runs the service on fake `/sys` and `/proc` and checks scenarios: Care, Fast, limit, unplugging, overnight drain, JEITA delay, skip_thermal, dropping a charge switch, the current table with the charge pump on, a reboot in the middle of a charge, charge-by-time, notifications, broken settings, the failsafe, a stuck command in diagnostics, installation on different root managers, thermal config replacement and removal. The panel is checked in a browser at 400 and 1000 px in both languages.
+
+## Background work
+
+Android keeps an app's permission to work in the background in an internal setting, `RUN_ANY_IN_BACKGROUND`: `allow` — may, `ignore` — the user forbade it. For many apps it ends up explicitly stored as `default`. Settings shows that as “allowed”, but the service that lets apps run in the background treats anything but `allow` as a ban: the app cannot keep a foreground service, and a player, recording or download stops when the screen locks. In fullscreen it is less noticeable — at the moment of locking the app is still on screen.
+
+The Background work card counts such apps (`cmd appops query-op`), sets `allow` with one button or one by one, and remembers whom it allowed — Undo sets `default` back for those only. Apps with `ignore` are left alone. Every half hour the service recounts and, if more apps are limited, writes it to the log and sends a notification. The card also shows whether Battery Saver is on right now and whether Android has a percentage-based saver schedule, with Turn off and Remove buttons. Removing the module does not revert the permission: it is an app setting, not a module one.

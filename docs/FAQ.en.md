@@ -166,7 +166,7 @@ cmd appops get <package> RUN_ANY_IN_BACKGROUND
 cmd appops set <package> RUN_ANY_IN_BACKGROUND allow
 ```
 
-If the first command shows `default` or `ignore`, the second allows background work — the same as “Allow background usage” in the app's settings. Which apps the system has already refused is shown in diagnostics, under “Apps refused background work”.
+If the first command shows `default` or `ignore`, the second allows background work — the same as “Allow background usage” in the app's settings. Easier — in the panel, the Background work card: it shows how many apps are limited and has Allow all, List (one by one) and Undo. Which apps the system has already refused is also shown in diagnostics, under “Apps refused background work”.
 
 </details>
 

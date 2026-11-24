@@ -191,6 +191,22 @@ saver_get() { sget global low_power; }
 saver_unstick() { [ "$(sget global low_power_sticky)" = 1 ] && sput global low_power_sticky 0; return 0; }
 saver_on() { cmd power set-mode 1 </dev/null >/dev/null 2>&1; [ "$(saver_get)" = 1 ] || sput global low_power 1; saver_unstick; }
 saver_off() { cmd power set-mode 0 </dev/null >/dev/null 2>&1; [ "$(saver_get)" = 0 ] || sput global low_power 0; saver_unstick; }
+
+# ----- Работа приложений в фоне / apps' background work -----
+# Разрешение хранится в appops RUN_ANY_IN_BACKGROUND: allow — можно, ignore — запретил сам пользователь.
+# Явно записанное default экран настроек показывает как «разрешено», но служба, которая пускает приложения
+# в фон, считает запретом всё, кроме allow: плеер или запись обрываются при блокировке экрана.
+# The permission lives in appops RUN_ANY_IN_BACKGROUND: allow — may, ignore — the user forbade it. An explicitly
+# stored default shows as "allowed" in Settings, but the service that lets apps run in the background treats
+# anything but allow as a ban: a player or a recorder stops when the screen locks.
+bg_list() { cmd appops query-op RUN_ANY_IN_BACKGROUND "$1" </dev/null 2>/dev/null | grep -E '^[A-Za-z][A-Za-z0-9_.]*$'; }
+bg_scan() {  # → $D/bg: def=N ign=M t=время / time
+  _bd=$(bg_list default | wc -l); _bi=$(bg_list ignore | wc -l)
+  put "$D/bg" "def=$((_bd + 0)) ign=$((_bi + 0)) t=$(date +%s)"
+}
+bg_get() {  # ключ / key → число из $D/bg / a number from $D/bg
+  _bl=""; rdv _bl "$D/bg"; for _w in $_bl; do [ "${_w%%=*}" = "$1" ] && { echo "${_w#*=}"; return 0; }; done; echo ""
+}
 net_rx() {  # $1 = шаблон интерфейса / interface glob
   s=0; for f in $R/sys/class/net/$1/statistics/rx_bytes; do [ -r "$f" ] && s=$((s + $(cat "$f"))); done; echo $s
 }

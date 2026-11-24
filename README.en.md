@@ -73,6 +73,7 @@ Everything people usually install a separate battery app for.
 - **Weekly trend** and a warning if drain went up.
 - **Battery wear** and an event log; app installs and removals if you want them.
 - **Notifications** (optional): charging pauses, charge-by-time, drain going up.
+- **Background work:** shows how many apps Android has limited in the background (that is why players, recording and downloads stop when the screen locks) and allows it with one button — with an undo.
 - **One-tap diagnostics** — a ready file for a bug report, about a minute; e-mail, IP and MAC addresses are masked in it. The file stays on the phone.
 </td></tr>
 <tr><td align="center"><img src="assets/mascot/export/feature-shield.svg" width="92" alt="Mascot holding a shield"></td><td>

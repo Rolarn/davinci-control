@@ -139,6 +139,15 @@ sess_end() {  # $1 = время конца, $2 = заряд в конце / end 
 }
 
 # ---------- расход во сне: тренд и предупреждение / sleep drain: trend and alert ----------
+# Раз в полчаса: не ограничил ли Android снова фон приложениям (после «Разрешить всем» в панели).
+# Every half hour: has Android limited apps' background work again (after "Allow all" in the panel).
+bg_check() {
+  _old=$(bg_get def); bg_scan; _new=$(bg_get def)
+  case "$_old" in ''|*[!0-9]*) return 0 ;; esac
+  case "$_new" in ''|*[!0-9]*) return 0 ;; esac
+  if [ "$_new" -gt "$_old" ]; then ev bg_reset "$_new" "$_old"; notify bg "$(t n_title)" "$(t bg_reset "$_new" "$_old")"; fi
+  return 0
+}
 drain_check() {
   r=$(awk -F, -v now="$now" '$4 > 0 && $2 > 0 { age = now - $1; m = $4 * 3600 / $2
       if (age < 7 * 86400) { a += m; na++ } else if (age < 28 * 86400) { b += m; nb++ } }
@@ -169,7 +178,7 @@ fb_check() {  # → fb=1, если пора дозаряжать / fb=1 when it 
 pk_m=$(stat -c %Y $PKGL 2>/dev/null)
 rdv cap $B/capacity; rdv t $B/temp; cap=${cap:-50}; t=${t:-250}; set_chg on
 PH=$(ph_edits); desc_key=""; fb_on=0; fb_for=""; fb_n=0
-why=""; scr=""; soff_t=""; i=0; last_h=0; last_pl=""; reg=0; reg_t=0; rd_t=0; tbl=""; L1=4; L2=8; L3=12
+why=""; scr=""; soff_t=""; i=0; last_h=0; bg_t=$(( $(date +%s) - 1680 )); last_pl=""; reg=0; reg_t=0; rd_t=0; tbl=""; L1=4; L2=8; L3=12
 # Сеанс, прерванный перезагрузкой: продолжаем, если кабель на месте, иначе закрываем по последней записи.
 # A session cut by a reboot: continue if the cable is still in, otherwise close it at the last record.
 if [ -f "$D/session" ]; then
@@ -365,6 +374,7 @@ while :; do
 
   # ----- история раз в 5 минут: время,заряд,темп×10,статус,ток мА,зарядка,экран,кабель,заряд в сотых долях % -----
   # ----- history every 5 minutes: time,charge,temp×10,status,mA,charging,screen,cable,charge in 0.01% -----
+  [ $((now - bg_t)) -ge 1800 ] && { bg_check; bg_t=$now; }
   if [ $((now - last_h)) -ge 300 ]; then
     rdv I $B/current_now; rdv raw $BMS/capacity_raw; case "$raw" in *[!0-9]*) raw="" ;; esac
     echo "$now,$cap,$t,$st,$(( ${I:-0} / 1000 )),$chg,$s,$pl,$raw" >> "$HIST"; last_h=$now

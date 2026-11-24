@@ -69,6 +69,8 @@ EOF
 echo "settings \$*" >> $R/calls.log
 case "\$1 \$2 \$3" in "get global low_power") cat $R/lowpower ;; "put global low_power") echo \$4 > $R/lowpower ;;
   "get global low_power_sticky") cat $R/sticky 2>/dev/null || echo null ;; "put global low_power_sticky") echo \$4 > $R/sticky ;;
+  "get global low_power_trigger_level") cat $R/trig 2>/dev/null || echo 0 ;; "put global low_power_trigger_level") echo \$4 > $R/trig ;;
+  "get global automatic_power_save_mode") echo 0 ;;
   "get system screen_brightness_mode") cat $R/brmode ;; "put system screen_brightness_mode") echo \$4 > $R/brmode ;; "get system screen_brightness") echo 255 ;; esac; true
 EOF
   cat > $R/bin/cmd <<EOF
@@ -76,8 +78,11 @@ EOF
 echo "cmd \$*" >> $R/calls.log
 # как Android: ручное включение экономии запоминается в low_power_sticky / like Android: a manual saver is sticky
 [ "\$1 \$2" = "power set-mode" ] && { echo \$3 > $R/lowpower; echo \$3 > $R/sticky; }
-[ "\$1 \$2" = "appops get" ] && echo "RUN_ANY_IN_BACKGROUND: default"
-[ "\$1 \$2" = "appops query-op" ] && printf 'com.a\ncom.b\ncom.c\n'
+# appops как в Android: режим каждого пакета в файле $R/appops/<пакет> / per-package mode in a file
+mkdir -p $R/appops
+[ "\$1 \$2" = "appops get" ] && { m=\$(cat $R/appops/\$3 2>/dev/null); [ -n "\$m" ] && echo "RUN_ANY_IN_BACKGROUND: \$m" || echo "No operations."; }
+[ "\$1 \$2 \$4" = "appops set RUN_ANY_IN_BACKGROUND" ] && echo \$5 > $R/appops/\$3
+[ "\$1 \$2" = "appops query-op" ] && { found=0; for f in $R/appops/*; do [ -f "\$f" ] && [ "\$(cat \$f)" = "\$4" ] && { echo \${f##*/}; found=1; }; done; [ \$found = 0 ] && echo "No operations."; }
 true
 EOF
   cat > $R/bin/getprop <<EOF

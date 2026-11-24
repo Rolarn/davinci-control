@@ -99,7 +99,11 @@ case \$n in
 esac
 exit 0
 EOF
-mkroot $SC/saver; echo 1 > $R/sticky; echo SAVER_BATT=1 > $R/$D_/config; run_daemon
+mkroot $SC/saver; echo 1 > $R/sticky; echo SAVER_BATT=1 > $R/$D_/config
+# заодно: всё было разрешено, а потом Android снова ограничил фон двум приложениям / meanwhile two apps get limited again
+echo "def=0 ign=0 t=0" > $R/$D_/bg; mkdir -p $R/appops; echo default > $R/appops/com.x; echo default > $R/appops/com.y
+run_daemon
+check "служба замечает, что фон снова ограничен / the service notices background work limited again" "grep -q '	bg_reset	2	0' $R/$D_/events.log && grep -q '^def=2 ' $R/$D_/bg"
 check "старое «залипание» снято при запуске / old sticky flag cleared at start" "[ -f $R/$D_/saver.v2 ] && grep -q 'settings put global low_power_sticky 0' $R/calls.log"
 check "без кабеля включена, без залипания / on when unplugged, not sticky" "grep -q saver_on $R/$D_/events.log && [ \$(grep -c 'cmd power set-mode 1' $R/calls.log) = 2 ]"
 check "выключил вручную — после включения экрана не включается / manual off is respected" "! grep -q saver_again $R/$D_/events.log && [ \$(grep -c saver_on $R/$D_/events.log) = 2 ]"

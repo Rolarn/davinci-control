@@ -71,6 +71,11 @@ set_applog_1	Настройка: записывать установку и уд
 set_applog_0	Настройка: приложения в журнал не записывать	Setting: do not log apps
 set_notify_1	Настройка: уведомления включены	Setting: notifications on
 set_notify_0	Настройка: уведомления выключены	Setting: notifications off
+bg_allow	Разрешил работу в фоне приложениям: {1}	Background work allowed for apps: {1}
+bg_undo	Вернул ограничение фона приложениям: {1}	Background limit restored for apps: {1}
+bg_reset	Android снова ограничил фон приложениям: {1} (было {2})	Android limited background work again for apps: {1} (was {2})
+saver_off_panel	Экономия заряда выключена из панели	Battery Saver turned off from the panel
+saver_unsched	Расписание экономии заряда убрано (было {1}%)	Battery Saver schedule removed (was {1}%)
 n_title	Davinci Control	Davinci Control
 n_fullby	Батарея заряжена до 100% к заданному времени	Battery charged to 100% by the set time
 n_test	Уведомления работают. Сюда придут: пауза зарядки, заряд к времени и рост расхода во сне.	Notifications work. You will get: charging pauses, charge-by-time and a rise in sleep drain.

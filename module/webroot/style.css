@@ -206,3 +206,20 @@ footer button { border: 0; background: none; color: var(--accent); font-size: 12
   transition: opacity .25s, transform .3s var(--ease); pointer-events: none; max-width: 90vw; z-index: 20 }
 #toast.show { opacity: .96; transform: translate(-50%, 0) }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important } }
+
+/* Работа в фоне / background work */
+.bgw { display: grid; gap: 8px; margin-top: 10px } .bgw:empty { display: none }
+.bgw .prob { animation: none }
+.bgh { margin: 10px 0 0 }
+.bgb { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; margin-top: 12px }
+.bgb .btn { transition: background .25s, color .25s, transform .15s }
+.bgb .btn.sure { background: var(--warn); color: #10131a }
+.lnk { display: block; margin: 10px auto 0; border: 0; background: transparent; color: var(--accent); font: 600 14px system-ui; padding: 8px 10px; border-radius: 10px }
+.lnk.sure { color: var(--warn) }
+.bgl h3 { font-size: 14px; margin: 16px 0 4px } .bgl h3:first-child { margin-top: 0 }
+.bgl p { color: var(--muted); font-size: 12.5px; margin: 0 0 8px; line-height: 1.45 }
+.bgr { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 7px 0; border-bottom: 1px solid var(--line) }
+.bgr:last-child { border-bottom: 0 }
+.bgr code { font: 13px ui-monospace, monospace; overflow-wrap: anywhere; min-width: 0 }
+.bgr button { flex: none; border: 1px solid var(--line); background: transparent; color: var(--accent); border-radius: 99px; padding: 5px 12px; font-weight: 600; font-size: 13px }
+.bgr button:disabled { color: var(--ok); border-color: transparent }

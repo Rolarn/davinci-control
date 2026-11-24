@@ -33,6 +33,21 @@ check "пробное уведомление отправлено / test notific
 tune fullby off >/dev/null
 check "зарядка к времени выключается / charge-by-time turns off" "grep -q '^FULL_BY=\$' $C"
 echo 1 > $R/lowpower; echo 1 > $R/sticky; tune saver 0 >/dev/null
+# работа в фоне: два ограничены Android, один — пользователем / background work: two limited by Android, one by the user
+rm -rf $R/appops; mkdir -p $R/appops; echo default > $R/appops/com.x; echo default > $R/appops/com.y; echo ignore > $R/appops/com.z
+tune bgscan >/dev/null
+check "подсчёт ограниченных / counting limited apps" "grep -q '^def=2 ign=1 ' $R/$D_/bg && tune json | python3 -c 'import json,sys; b=json.load(sys.stdin)[\"bg\"]; assert (b[\"def\"],b[\"ign\"],b[\"mine\"])==(2,1,0), b'"
+check "список по группам / list by group" "tune bglist | python3 -c 'import json,sys; l=json.load(sys.stdin); assert l[\"def\"]==[\"com.x\",\"com.y\"] and l[\"ign\"]==[\"com.z\"], l'"
+tune bgallow com.z >/dev/null
+check "свой запрет пользователя не трогаем / the user's own ban is left alone" "[ \$(cat $R/appops/com.z) = ignore ]"
+tune bgallow all >/dev/null
+check "«Разрешить всем»: только default → allow / allow all: only default" "[ \$(cat $R/appops/com.x) = allow ] && [ \$(cat $R/appops/com.y) = allow ] && [ \$(cat $R/appops/com.z) = ignore ] && grep -q '	bg_allow	2' $R/$D_/events.log && grep -q '^def=0 ign=1 ' $R/$D_/bg"
+check "модуль помнит, кому разрешил / the module remembers whom it allowed" "[ \$(grep -c . $R/$D_/bg.allowed) = 2 ]"
+tune bgundo >/dev/null
+check "«Вернуть как было» / undo" "[ \$(cat $R/appops/com.x) = default ] && [ \$(cat $R/appops/com.y) = default ] && [ ! -f $R/$D_/bg.allowed ] && grep -q '	bg_undo	2' $R/$D_/events.log"
+echo 75 > $R/trig; echo 1 > $R/lowpower; tune saverunsched >/dev/null; tune saveroff >/dev/null
+check "расписание экономии убрано, экономия выключена / schedule removed, saver off" "[ \$(cat $R/trig) = 0 ] && [ \$(cat $R/lowpower) = 0 ] && grep -q '	saver_unsched	75' $R/$D_/events.log"
+rm -rf $R/appops
 check "выключение экономии в панели выключает её сразу и снимает залипание / turning the switch off turns the saver off" "[ \$(cat $R/lowpower) = 0 ] && [ \$(cat $R/sticky) = 0 ] && grep -q '^SAVER_BATT=0' $C"
 check "события настроек / setting events" "grep -q 'set_mode_fast' $R/$D_/events.log && grep -q 'set_profile_eco' $R/$D_/events.log"
 
@@ -54,6 +69,7 @@ echo "W/ActivityManager( 1596): Service.startForeground() not allowed due to bg 
 echo "I/ActivityManager( 1596): Background started FGS: Allowed [callingPackage: com.ok; callingUid: 10001; uidState: TOP ]"
 EOF
 chmod +x $R/bin/logcat
+mkdir -p $R/appops; for p in com.rec com.a com.b; do echo default > $R/appops/$p; done
 cat > $R/bin/dumpsys <<EOF
 #!/bin/sh
 cat $R/sys/class/backlight/panel0-backlight/leak
